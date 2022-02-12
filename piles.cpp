@@ -24,9 +24,7 @@ int sum_pile(vector<bool> pile){
 }
 
 void print(vector<vector<int>> piles, int n_cubes){
-//    for(auto & p : piles[0]){
-//        std::cout<<p<<" ";
-//    }
+
     // Make a string of all zeros, then replace the index corresponding to the cube root of each number with a 1
     for (auto & pile : piles) {
         string line = string(n_cubes,'0');
@@ -39,7 +37,24 @@ void print(vector<vector<int>> piles, int n_cubes){
     cout<<endl;
 }
 
-vector<vector<int>> place(vector<vector<int>> &piles, vector<int> &remaining, int pos, int n_cubes){
+void print_bool(vector<vector<bool>> piles, int n_cubes){
+
+    // Make a string of all zeros, then replace the index corresponding to the cube root of each number with a 1
+    for (auto & pile : piles) {
+        for(int i=0;i<n_cubes;i++){
+            if (pile[i]){
+                cout<<"1";
+            }else{
+                cout<<"0";
+            };
+        }
+        cout<<endl;
+    }
+
+}
+
+
+vector<vector<bool>> place(vector<vector<bool>> &piles, vector<int> &remaining, int pos, int n_cubes){
     int n_piles = piles.size();
 
     for(int p=0; p<n_piles; p++){
@@ -57,80 +72,65 @@ vector<vector<int>> place(vector<vector<int>> &piles, vector<int> &remaining, in
                 return piles;
             }else{
                 if (remaining[p]>=0) {
-                    piles[p].emplace_back(cubes[pos]);
+                    piles[p][pos]=true;
 
                     auto ret = place(piles, remaining, pos - 1, n_cubes);
 
                     if (ret[0].size()!=0){
                         return ret;
                     }
-                    piles[p].pop_back();
+                    piles[p][pos]=false;
                 }
             }
         }
 
         remaining[p]+=cubes[pos];
     }
-    return vector<vector<int>>{{}};
+    return vector<vector<bool>>{{}};
 }
 
-vector<vector<int>> init_distribution(int n_piles, int n_cubes){
+vector<vector<bool>> init_distribution(int n_piles, int n_cubes){
     int target = sums[n_cubes-1]/n_piles;
 
-    vector<vector<int>> piles(1);
-    piles[0].push_back((n_cubes*n_cubes*n_cubes));
+    vector<vector<bool>> piles(n_piles, vector<bool>(n_cubes, false));
+    piles[0][n_cubes-1]=true;
 
     for (int pile_num=1; pile_num<n_piles; pile_num++){
         // The condition here is that we can place things without loss of generality
         // as long as two adjacent cubes add up to greater than the target. As soon
         // as that's not true the smaller could either go in a new pile, or double up
-        // with an already placed pile and we have to leave it to the main solver to
+        // with an already placed pile, and we have to leave it to the main solver to
         // figure tha one out.
         if (cubes[n_cubes-pile_num]+cubes[n_cubes-pile_num-1]>target){
-            int c = (n_cubes-pile_num);
-            piles.push_back({c*c*c});
+            piles[pile_num][n_cubes-pile_num-1]=true;
         }
-    }
-
-    // Once we have placed all the cubes we can place, we need to pad
-    // out our piles to n_piles with empty piles
-    while (piles.size()<n_piles){
-        piles.emplace_back(vector<int>{});
-    }
-
-    for(auto & pile : piles){
-        pile.reserve(n_cubes/n_piles);
     }
 
     return piles;
 }
 
-vector<int> init_remaining(vector<vector<int>> piles, int n_cubes){
+vector<int> init_remaining(vector<vector<bool>> piles, int n_cubes){
     // Given a vector of piles, calculate the remaining amount that the piles needs
     auto n_piles = piles.size();
 
     vector<int> remaining={};
     for(auto & pile : piles){
-        if (pile.size()!=0) {
-            remaining.emplace_back(sums[n_cubes - 1] / n_piles - pile[0]);
-        }else{
-            remaining.emplace_back(sums[n_cubes - 1] / n_piles);
-        }
+        remaining.emplace_back(sums[n_cubes - 1] / n_piles - sum_pile(pile));
     }
     return remaining;
 }
 
-int init_pos(vector<vector<int>> piles){
+int init_pos(vector<vector<bool>> piles){
     int pos=0;
     auto it = piles.rbegin();
 
-    while (it != piles.rend()){
-        if ((*it).size()!=0){
-            pos = cbrt((*it)[0])-2;
-            break;
-        }
-        it++;
-    }
+    for (int i=piles.size()-1; i>=0;i--){
+        auto pile = piles[i];
 
-    return pos;
+        for(int j=0; j<pile.size(); j++){
+            if (pile[j]){
+                return j-1;
+            }
+        }
+    }
 }
