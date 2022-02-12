@@ -11,8 +11,8 @@ void print(vector<vector<bool>> piles, vector<int> remaining);
 int sum_pile(vector<vector<bool>> piles);
 
 int main() {
-    int n_piles = 8;
-    int n_cubes = 47;
+    int n_piles = 7;
+    int n_cubes = 41;
 
     if (sums[n_cubes-1]%n_piles!=0){
         cout<<"The sum of the first "<<n_cubes<<" cubes is not divisible by "<<n_piles<<". Not Possible ☹️"<<endl;
