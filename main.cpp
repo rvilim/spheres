@@ -5,23 +5,20 @@
 #include "defs.h"
 #include "piles.h"
 #include <chrono>
+#include <bitset>
 
 using namespace std;
 
-void print(vector<vector<bool>> piles, vector<int> remaining);
-int sum_pile(vector<vector<bool>> piles);
-
 int main() {
-    int n_piles = 7;
-    int n_cubes = 41;
+
 
     if (sums[n_cubes-1]%n_piles!=0){
         cout<<"The sum of the first "<<n_cubes<<" cubes is not divisible by "<<n_piles<<". Not Possible ☹️"<<endl;
         return 1;
     }
 
-    auto piles = init_distribution( n_piles,  n_cubes);
-    auto remaining = init_remaining(piles, n_cubes);
+    auto piles = init_distribution();
+    auto remaining = init_remaining(piles);
     auto pos = init_pos(piles);
 
     for(int i=0;i<n_piles;i++){
@@ -29,14 +26,15 @@ int main() {
 
     }
 
-    vector<bool> piles_flat;
+    bitset<n_piles*n_cubes> piles_flat;
     for(int i=0;i<n_piles;i++){
         for(int c=0; c<n_cubes;c++){
-            piles_flat.emplace_back(piles[i][c]);
+            piles_flat.set(i*n_cubes+c, piles[i][c]);
         }
     }
+
     auto start = chrono::high_resolution_clock::now();
-    place(piles_flat, remaining, pos, n_cubes, n_piles);
+    place(piles_flat, remaining, pos);
     auto stop = chrono::high_resolution_clock::now();
     auto duration = duration_cast<chrono::milliseconds>(stop-start);
     std::cout<<"Completed in "<<duration.count()<<" milliseconds"<<endl;

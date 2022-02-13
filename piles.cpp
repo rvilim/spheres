@@ -23,30 +23,16 @@ int sum_pile(vector<bool> pile){
     return s;
 }
 
-void print(vector<vector<int>> piles, int n_cubes){
-
+void print_bool(bitset<n_piles*n_cubes> piles){
     // Make a string of all zeros, then replace the index corresponding to the cube root of each number with a 1
-    for (auto & pile : piles) {
-        string line = string(n_cubes,'0');
-
-        for(auto & p : pile){
-            line[cbrt(p)-1]='1';
-        }
-        cout<<line<<" "<<accumulate(pile.begin(), pile.end(), 0)<<endl;
-    }
-    cout<<endl;
-}
-
-void print_bool(vector<bool> piles, int n_cubes){
-
-    // Make a string of all zeros, then replace the index corresponding to the cube root of each number with a 1
-    for (int p=0;p<piles.size()/n_cubes; p++) {
+    for (int p=0;p<n_piles; p++) {
         for(int i=0;i<n_cubes;i++){
-            if (piles[p*n_cubes+i]){
-                cout<<"1";
-            }else{
-                cout<<"0";
-            };
+//            if (piles[p*n_cubes+i]){
+//                cout<<"1";
+//            }else{
+//                cout<<"0";
+//            };
+            cout<<piles[p*n_cubes+i];
         }
         cout<<endl;
     }
@@ -54,7 +40,7 @@ void print_bool(vector<bool> piles, int n_cubes){
 }
 
 
-bool place(vector<bool> &piles, vector<int> &remaining, int pos, int n_cubes, int n_piles){
+bool place(bitset<n_cubes*n_piles> &piles, vector<int> &remaining, int pos){
 
     for(int p=0; p<n_piles; p++){
         if (remaining[p] >= cubes[pos]){
@@ -62,24 +48,24 @@ bool place(vector<bool> &piles, vector<int> &remaining, int pos, int n_cubes, in
 
             if (pos==0){
 
-                for(int i=0;i<piles.size();i++){
+                for(int i=0;i<n_piles;i++){
                     cout<<"Remaining in pile "<<i<<": "<<remaining[i]<<endl;
                 }
 
-                piles[p*n_cubes+0]=true;
+                piles.set(p*n_cubes+0, true);
 
-                print_bool(piles, n_cubes);
+                print_bool(piles);
 
                 return true;
             }else{
-                piles[p*n_cubes+pos]=true;
+                piles.set(p*n_cubes+pos, true);
 
-                auto ret = place(piles, remaining, pos - 1, n_cubes, n_piles);
+                auto ret = place(piles, remaining, pos - 1);
 
                 if (ret){
                     return ret;
                 }
-                piles[p*n_cubes+pos]=false;
+                piles.set(p*n_cubes+pos, false);
 
             }
             remaining[p]+=cubes[pos];
@@ -90,7 +76,7 @@ bool place(vector<bool> &piles, vector<int> &remaining, int pos, int n_cubes, in
     return false;
 }
 
-vector<vector<bool>> init_distribution(int n_piles, int n_cubes){
+vector<vector<bool>> init_distribution(){
     int target = sums[n_cubes-1]/n_piles;
 
     vector<vector<bool>> piles(n_piles, vector<bool>(n_cubes, false));
@@ -110,18 +96,14 @@ vector<vector<bool>> init_distribution(int n_piles, int n_cubes){
     return piles;
 }
 
-vector<int> init_remaining(vector<vector<bool>> piles, int n_cubes){
-    // Given a vector of piles, calculate the remaining amount that the piles needs
-    auto n_piles = piles.size();
+vector<int> init_remaining(vector<vector<bool>> piles){
 
     vector<int> remaining={};
 
     for(int i=0; i<piles.size();i++){
         remaining.emplace_back(sums[n_cubes - 1] / n_piles - sum_pile(piles[i]));
     }
-//    for(auto & pile : piles){
 
-//    }
     return remaining;
 }
 
