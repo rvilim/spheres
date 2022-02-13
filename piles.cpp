@@ -57,9 +57,10 @@ void print_bool(vector<vector<bool>> piles, int n_cubes){
 bool place(vector<vector<bool>> &piles, vector<int> &remaining, int pos, int n_cubes, int n_piles){
 
     for(int p=0; p<n_piles; p++){
-        remaining[p]-=cubes[pos];
+//        remaining[p]-=;
 
-        if (remaining[p] >= 0){
+        if (remaining[p] >= cubes[pos]){
+            remaining[p]-=cubes[pos];
             if (pos==0){
 
                 for(int i=0;i<piles.size();i++){
@@ -72,20 +73,20 @@ bool place(vector<vector<bool>> &piles, vector<int> &remaining, int pos, int n_c
 
                 return true;
             }else{
-                if (remaining[p]>=0) {
-                    piles[p][pos]=true;
+                piles[p][pos]=true;
 
-                    auto ret = place(piles, remaining, pos - 1, n_cubes, n_piles);
+                auto ret = place(piles, remaining, pos - 1, n_cubes, n_piles);
 
-                    if (ret){
-                        return ret;
-                    }
-                    piles[p][pos]=false;
+                if (ret){
+                    return ret;
                 }
+                piles[p][pos]=false;
+
             }
+            remaining[p]+=cubes[pos];
         }
 
-        remaining[p]+=cubes[pos];
+
     }
     return false;
 }
