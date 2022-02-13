@@ -9,7 +9,4 @@
 extern const int sums[];
 extern const int cubes[];
 
-#define n_cubes 41
-#define n_piles 7
-
 #endif //PILES_DEFS_H

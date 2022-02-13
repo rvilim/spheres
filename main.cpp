@@ -10,32 +10,19 @@
 using namespace std;
 
 int main() {
+    const int n_cubes=23;
+    const int n_piles=3;
 
     if (sums[n_cubes-1]%n_piles!=0){
         cout<<"The sum of the first "<<n_cubes<<" cubes is not divisible by "<<n_piles<<". Not Possible ☹️"<<endl;
         return 1;
     }
 
-    auto piles = init_distribution();
-    auto remaining = init_remaining(piles);
-    auto pos = init_pos(piles);
+    int target = sums[n_cubes-1]/n_piles;
 
-    for(int i=0;i<n_piles;i++){
-        cout<<remaining[i]<<endl;
-
-    }
-
-    bitset<n_piles*n_cubes> piles_flat;
-    for(int i=0;i<n_piles;i++){
-        for(int c=0; c<n_cubes;c++){
-            piles_flat.set(i*n_cubes+c, piles[i][c]);
-        }
-    }
-
-    auto start = chrono::high_resolution_clock::now();
-    place(piles_flat, remaining, pos);
-    auto stop = chrono::high_resolution_clock::now();
-    auto duration = duration_cast<chrono::milliseconds>(stop-start);
-    std::cout<<"Completed in "<<duration.count()<<" milliseconds"<<endl;
+    vector<bool> pile(n_cubes, false);
+    vector<bool> disallowed(n_cubes, false);
+    auto remaining = cubes[n_cubes-1];
+    make_pile(target, remaining,n_cubes-1, pile, disallowed, n_piles, n_cubes);
 
 }

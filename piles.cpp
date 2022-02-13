@@ -16,108 +16,40 @@ const int cubes[100] = {1, 8, 27, 64, 125, 216, 343, 512, 729, 1000, 1331, 1728,
 int sum_pile(vector<bool> pile){
     int s=0;
 
-    for(int i=0; i<pile.size(); i++){
-        s+=pile[i]*cubes[i];
+    auto n_cubes=pile.size();
+    for(int pos=0; pos<n_cubes; pos++){
+        auto cube_index = n_cubes-pos;
+
+        s+=pile[pos]*cubes[cube_index];
     }
 
     return s;
 }
-
-void print_bool(bitset<n_piles*n_cubes> piles){
-    // Make a string of all zeros, then replace the index corresponding to the cube root of each number with a 1
-    for (int p=0;p<n_piles; p++) {
-        for(int i=0;i<n_cubes;i++){
-//            if (piles[p*n_cubes+i]){
-//                cout<<"1";
-//            }else{
-//                cout<<"0";
-//            };
-            cout<<piles[p*n_cubes+i];
-        }
-        cout<<endl;
+void print_pile(vector<bool> pile){
+    for(auto p : pile){
+        cout<<p;
     }
-
+    cout<<" -> "<<sum_pile(pile)<<endl;
 }
+void make_pile(int target, int remaining, int pos, vector<bool> pile, vector<bool> disallowed, int n_piles, int n_cubes){
+    auto cube_index = n_cubes-pos;
 
-
-bool place(bitset<n_cubes*n_piles> &piles, vector<int> &remaining, int pos){
-
-    for(int p=0; p<n_piles; p++){
-        if (remaining[p] >= cubes[pos]){
-            remaining[p]-=cubes[pos];
-
-            if (pos==0){
-
-                for(int i=0;i<n_piles;i++){
-                    cout<<"Remaining in pile "<<i<<": "<<remaining[i]<<endl;
-                }
-
-                piles.set(p*n_cubes+0, true);
-
-                print_bool(piles);
-
-                return true;
-            }else{
-                piles.set(p*n_cubes+pos, true);
-
-                auto ret = place(piles, remaining, pos - 1);
-
-                if (ret){
-                    return ret;
-                }
-                piles.set(p*n_cubes+pos, false);
-
-            }
-            remaining[p]+=cubes[pos];
-        }
-
-
-    }
-    return false;
-}
-
-vector<vector<bool>> init_distribution(){
-    int target = sums[n_cubes-1]/n_piles;
-
-    vector<vector<bool>> piles(n_piles, vector<bool>(n_cubes, false));
-    piles[0][n_cubes-1]=true;
-
-    for (int pile_num=1; pile_num<n_piles; pile_num++){
-        // The condition here is that we can place things without loss of generality
-        // as long as two adjacent cubes add up to greater than the target. As soon
-        // as that's not true the smaller could either go in a new pile, or double up
-        // with an already placed pile, and we have to leave it to the main solver to
-        // figure tha one out.
-        if (cubes[n_cubes-pile_num]+cubes[n_cubes-pile_num-1]>target){
-            piles[pile_num][n_cubes-pile_num-1]=true;
+    if (not disallowed[pos] && cubes[cube_index]==target){ // Success, we have a pile
+        pile[pos]=true;
+        print_pile(pile);
+        pile[pos]=false;
+    }else if (pos==0){ // Can't find a pile
+        return;
+    }else{ // Hope is still alive
+        if (disallowed[pos]){ // If the one we are on is disallowed, just skip it.
+            make_pile(target, remaining, pos-1, pile, disallowed, n_piles, n_cubes);
+        } else {
+            // Call the function again with the bit in question both set and unset
+            pile[pos] = true;
+            make_pile(target - cubes[cube_index], remaining- cubes[cube_index], pos - 1, pile, disallowed, n_piles, n_cubes);
+            pile[pos] = false;
+            make_pile(target, remaining, pos - 1, pile, disallowed, n_piles, n_cubes);
         }
     }
 
-    return piles;
-}
-
-vector<int> init_remaining(vector<vector<bool>> piles){
-
-    vector<int> remaining={};
-
-    for(int i=0; i<piles.size();i++){
-        remaining.emplace_back(sums[n_cubes - 1] / n_piles - sum_pile(piles[i]));
-    }
-
-    return remaining;
-}
-
-int init_pos(vector<vector<bool>> piles){
-    int pos=0;
-    auto it = piles.rbegin();
-
-    for (int i=piles.size()-1; i>=0;i--){
-        auto pile = piles[i];
-
-        for(int j=0; j<pile.size(); j++){
-            if (pile[j]){
-                return j-1;
-            }
-        }
-    }
 }

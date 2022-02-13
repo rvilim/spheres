@@ -8,12 +8,7 @@
 
 using namespace std;
 
-int sum_pile(vector<bool> pile);
-void print(vector<vector<int>> piles);
-void print_bool(bitset<n_cubes*n_piles> piles);
-bool place(bitset<n_cubes*n_piles> &piles, vector<int> &remaining, int pos);
+void make_pile(int target, int remaining, int pos, vector<bool> pile, vector<bool> disallowed, int n_piles, int n_cubes);
+void print_pile(vector<bool> pile);
 
-vector<vector<bool>> init_distribution();
-int init_pos(vector<vector<bool>> piles);
-vector<int> init_remaining(vector<vector<bool>> piles);
 #endif //PILES_PILES_H
