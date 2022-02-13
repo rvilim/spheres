@@ -14,6 +14,38 @@ TEST_CASE( "Check sum of pile", "[sum_pile]" ) {
     REQUIRE( sum_pile(p) == 28 );
 }
 
+TEST_CASE("Check number of piles", "[num_piles]"){
+    {
+        int n_piles=2;
+        int n_cubes=12;
+        int target = sums[n_cubes-1]/n_piles;
+        auto remaining = sums[n_cubes-1];
+
+        vector<bool> pile(n_cubes, false);
+        vector<bool> disallowed(n_cubes, false);
+        auto accumulator = ThreadsafeQueue<vector<bool>>();
+
+        make_pile(target, remaining,n_cubes-1, pile, disallowed, accumulator, n_piles, n_cubes);
+
+        REQUIRE(accumulator.size()==2);
+    }
+
+    {
+        int n_piles=3;
+        int n_cubes=23;
+        int target = sums[n_cubes-1]/n_piles;
+        auto remaining = sums[n_cubes-1];
+
+        vector<bool> pile(n_cubes, false);
+        vector<bool> disallowed(n_cubes, false);
+        auto accumulator = ThreadsafeQueue<vector<bool>>();
+
+        make_pile(target, remaining,n_cubes-1, pile, disallowed, accumulator, n_piles, n_cubes);
+
+        REQUIRE(accumulator.size()==110);
+    }
+}
+/*
 TEST_CASE( "Check initial cube placement", "[init_distribution]" ) {
     vector<vector<bool>> expected_1(12, vector<bool>(63, false));
 
@@ -51,4 +83,4 @@ TEST_CASE( "Check that init_remaining is working correctly", "[init_remaining]" 
     REQUIRE(init_remaining(piles_1, 23)==expected_1);
 }
 
-
+*/

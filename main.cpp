@@ -6,6 +6,8 @@
 #include "piles.h"
 #include <chrono>
 #include <bitset>
+#include <functional>
+#include "ThreadSafeQueue.h"
 
 using namespace std;
 
@@ -22,7 +24,20 @@ int main() {
 
     vector<bool> pile(n_cubes, false);
     vector<bool> disallowed(n_cubes, false);
-    auto remaining = cubes[n_cubes-1];
-    make_pile(target, remaining,n_cubes-1, pile, disallowed, n_piles, n_cubes);
+
+    auto remaining = sums[n_cubes-1];
+    auto start = chrono::high_resolution_clock::now();
+    auto accumulator = ThreadsafeQueue<vector<bool>>();
+
+    make_pile(target, remaining,n_cubes-1, pile, disallowed, accumulator, n_piles, n_cubes);
+
+    auto stop = chrono::high_resolution_clock::now();
+    auto duration = duration_cast<chrono::milliseconds>(stop-start);
+
+    while(accumulator.size()!=0){
+        print_pile(*accumulator.pop());
+    }
+
+    std::cout<<endl<<"Completed in "<<duration.count()<<" milliseconds"<<endl;
 
 }
