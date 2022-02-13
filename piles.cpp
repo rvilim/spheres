@@ -37,12 +37,12 @@ void print(vector<vector<int>> piles, int n_cubes){
     cout<<endl;
 }
 
-void print_bool(vector<vector<bool>> piles, int n_cubes){
+void print_bool(vector<bool> piles, int n_cubes){
 
     // Make a string of all zeros, then replace the index corresponding to the cube root of each number with a 1
-    for (auto & pile : piles) {
+    for (int p=0;p<piles.size()/n_cubes; p++) {
         for(int i=0;i<n_cubes;i++){
-            if (pile[i]){
+            if (piles[p*n_cubes+i]){
                 cout<<"1";
             }else{
                 cout<<"0";
@@ -54,33 +54,32 @@ void print_bool(vector<vector<bool>> piles, int n_cubes){
 }
 
 
-bool place(vector<vector<bool>> &piles, vector<int> &remaining, int pos, int n_cubes, int n_piles){
+bool place(vector<bool> &piles, vector<int> &remaining, int pos, int n_cubes, int n_piles){
 
     for(int p=0; p<n_piles; p++){
-//        remaining[p]-=;
-
         if (remaining[p] >= cubes[pos]){
             remaining[p]-=cubes[pos];
+
             if (pos==0){
 
                 for(int i=0;i<piles.size();i++){
                     cout<<"Remaining in pile "<<i<<": "<<remaining[i]<<endl;
                 }
 
-                piles[p][0]=true;
+                piles[p*n_cubes+0]=true;
 
                 print_bool(piles, n_cubes);
 
                 return true;
             }else{
-                piles[p][pos]=true;
+                piles[p*n_cubes+pos]=true;
 
                 auto ret = place(piles, remaining, pos - 1, n_cubes, n_piles);
 
                 if (ret){
                     return ret;
                 }
-                piles[p][pos]=false;
+                piles[p*n_cubes+pos]=false;
 
             }
             remaining[p]+=cubes[pos];

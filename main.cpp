@@ -28,8 +28,15 @@ int main() {
         cout<<remaining[i]<<endl;
 
     }
+
+    vector<bool> piles_flat;
+    for(int i=0;i<n_piles;i++){
+        for(int c=0; c<n_cubes;c++){
+            piles_flat.emplace_back(piles[i][c]);
+        }
+    }
     auto start = chrono::high_resolution_clock::now();
-    place(piles, remaining, pos, n_cubes, n_piles);
+    place(piles_flat, remaining, pos, n_cubes, n_piles);
     auto stop = chrono::high_resolution_clock::now();
     auto duration = duration_cast<chrono::milliseconds>(stop-start);
     std::cout<<"Completed in "<<duration.count()<<" milliseconds"<<endl;
