@@ -3,7 +3,7 @@
 #include <string>
 #include <math.h>
 #include <numeric>
-
+#include <array>
 
 #include "piles.h"
 #include "defs.h"
@@ -54,8 +54,7 @@ void print_bool(vector<vector<bool>> piles, int n_cubes){
 }
 
 
-vector<vector<bool>> place(vector<vector<bool>> &piles, vector<int> &remaining, int pos, int n_cubes){
-    int n_piles = piles.size();
+bool place(vector<vector<bool>> &piles, vector<int> &remaining, int pos, int n_cubes, int n_piles){
 
     for(int p=0; p<n_piles; p++){
         remaining[p]-=cubes[pos];
@@ -67,16 +66,18 @@ vector<vector<bool>> place(vector<vector<bool>> &piles, vector<int> &remaining, 
                     cout<<"Remaining in pile "<<i<<": "<<remaining[i]<<endl;
                 }
 
-                piles[p].emplace_back(cubes[pos]);
+                piles[p][0]=true;
 
-                return piles;
+                print_bool(piles, n_cubes);
+
+                return true;
             }else{
                 if (remaining[p]>=0) {
                     piles[p][pos]=true;
 
-                    auto ret = place(piles, remaining, pos - 1, n_cubes);
+                    auto ret = place(piles, remaining, pos - 1, n_cubes, n_piles);
 
-                    if (ret[0].size()!=0){
+                    if (ret){
                         return ret;
                     }
                     piles[p][pos]=false;
@@ -86,7 +87,7 @@ vector<vector<bool>> place(vector<vector<bool>> &piles, vector<int> &remaining, 
 
         remaining[p]+=cubes[pos];
     }
-    return vector<vector<bool>>{{}};
+    return false;
 }
 
 vector<vector<bool>> init_distribution(int n_piles, int n_cubes){
@@ -114,9 +115,13 @@ vector<int> init_remaining(vector<vector<bool>> piles, int n_cubes){
     auto n_piles = piles.size();
 
     vector<int> remaining={};
-    for(auto & pile : piles){
-        remaining.emplace_back(sums[n_cubes - 1] / n_piles - sum_pile(pile));
+
+    for(int i=0; i<piles.size();i++){
+        remaining.emplace_back(sums[n_cubes - 1] / n_piles - sum_pile(piles[i]));
     }
+//    for(auto & pile : piles){
+
+//    }
     return remaining;
 }
 

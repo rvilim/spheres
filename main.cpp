@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
+#include <array>
 #include "defs.h"
 #include "piles.h"
 #include <chrono>
@@ -23,11 +24,14 @@ int main() {
     auto remaining = init_remaining(piles, n_cubes);
     auto pos = init_pos(piles);
 
+    for(int i=0;i<n_piles;i++){
+        cout<<remaining[i]<<endl;
+
+    }
     auto start = chrono::high_resolution_clock::now();
-    auto placed = place(piles, remaining, pos, n_cubes);
+    place(piles, remaining, pos, n_cubes, n_piles);
     auto stop = chrono::high_resolution_clock::now();
     auto duration = duration_cast<chrono::milliseconds>(stop-start);
     std::cout<<"Completed in "<<duration.count()<<" milliseconds"<<endl;
 
-    print_bool(placed, n_cubes);
 }
