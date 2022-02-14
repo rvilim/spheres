@@ -4,11 +4,17 @@
 #include <math.h>
 #include <numeric>
 #include <array>
-
+#include <thread>
+#include <chrono>
 #include "piles.h"
 #include "defs.h"
+#include <cstdlib>
+
+#include "blockingconcurrentqueue.h"
 
 using namespace std;
+using namespace moodycamel;
+
 int num=0;
 
 const int sums[100] = {1, 9, 36, 100, 225, 441, 784, 1296, 2025, 3025, 4356, 6084, 8281, 11025, 14400, 18496, 23409, 29241, 36100, 44100, 53361, 64009, 76176, 90000, 105625, 123201, 142884, 164836, 189225, 216225, 246016, 278784, 314721, 354025, 396900, 443556, 494209, 549081, 608400, 672400, 741321, 815409, 894916, 980100, 1071225, 1168561, 1272384, 1382976, 1500625, 1625625, 1758276, 1898884, 2047761, 2205225, 2371600, 2547216, 2732409, 2927521, 3132900, 3348900, 3575881, 3814209, 4064256, 4326400, 4601025, 4888521, 5189284, 5503716, 5832225, 6175225, 6533136, 6906384, 7295401, 7700625, 8122500, 8561476, 9018009, 9492561, 9985600, 10497600, 11029041, 11580409, 12152196, 12744900, 13359025, 13995081, 14653584, 15335056, 16040025, 16769025, 17522596, 18301284, 19105641, 19936225, 20793600, 21678336, 22591009, 23532201, 24502500, 25502500};
@@ -29,11 +35,20 @@ void print_pile(vector<bool> pile){
     for(auto p : pile){
         cout<<p;
     }
-//    cout<<" -> "<<sum_pile(pile)<<endl;
+    cout<<" -> "<<sum_pile(pile);
     cout<<endl;
 }
 
-void make_pile(int target, int remaining, int pos, vector<bool> &pile, vector<bool> &disallowed, ThreadsafeQueue<vector<bool>> &accumulator, int n_piles, int n_cubes){
+void print_piles(vector<vector<bool>> piles) {
+    for(auto p : piles) {
+        print_pile(p);
+    }
+}
+
+void make_pile(int target, int remaining, int pos,
+               vector<bool> &pile, vector<bool> &disallowed, vector<vector<bool>> &history,
+               int queue_index,
+               int n_piles, int n_cubes){
 
     if (remaining<target){ // If there is no way we can construct a pile from the remaining cubes, return
         return;
@@ -42,7 +57,10 @@ void make_pile(int target, int remaining, int pos, vector<bool> &pile, vector<bo
     if ((not disallowed[pos]) && cubes[pos]==target) { // Success! we have a pile
         pile[pos] = true;
         num += 1;
-        accumulator.push(pile);
+
+        vector<vector<bool>> result(history);
+        result.push_back(pile);
+        queues[queue_index].enqueue(result);
         pile[pos] = false;
     }
 
@@ -51,16 +69,96 @@ void make_pile(int target, int remaining, int pos, vector<bool> &pile, vector<bo
     }else{ // Hope is still alive
 
         if (disallowed[pos]){ // If the one we are on is disallowed, just skip it.
-            make_pile(target, remaining, pos-1, pile, disallowed, accumulator, n_piles, n_cubes);
+            make_pile(target, remaining, pos-1, pile, disallowed, history, queue_index, n_piles, n_cubes);
         } else {
             // Call the function again with the bit in question both set and unset
 
             if (target> cubes[pos]){
                 pile[pos] = true;
-                make_pile(target - cubes[pos], remaining - cubes[pos], pos - 1, pile, disallowed, accumulator, n_piles, n_cubes);
+                make_pile(target - cubes[pos], remaining - cubes[pos], pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
                 pile[pos] = false;
             }
-            make_pile(target, remaining, pos - 1, pile, disallowed, accumulator, n_piles, n_cubes);
+            make_pile(target, remaining, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
         }
     }
+}
+
+void start_source(int target, int n_piles, int n_cubes){
+    auto remaining = sums[n_cubes-1];
+
+    vector<bool> pile(n_cubes, false);
+    vector<bool> disallowed(n_cubes, false);
+    vector<vector<bool>> history;
+
+    make_pile(target, remaining,n_cubes-1, pile, disallowed, history, 0, n_piles, n_cubes);
+
+}
+
+vector<bool> make_disallowed(vector<vector<bool>> &history){
+    vector<bool> disallowed=history[0];
+
+    for (int i=1; i<history.size(); i++){
+        for(int j=0; j<disallowed.size(); j++){
+            disallowed[j] = disallowed[j] | history[i][j];
+        }
+    }
+
+    return disallowed;
+}
+
+void start_thread(int target, int n_piles, int n_cubes, int source_queue, int dest_queue){
+    while(true){
+        vector<vector<bool>> history;
+        auto ret = queues[source_queue].wait_dequeue_timed(history, std::chrono::milliseconds(500));
+
+        if ((!ret) && (is_done())) return;
+
+        if (ret){
+            vector<bool> pile(n_cubes, false);
+
+            auto disallowed = make_disallowed(history);
+
+            make_pile(target, target,n_cubes-1, pile, disallowed, history, dest_queue, n_piles, n_cubes);
+        }
+
+    }
+}
+
+bool is_done(){
+    bool done=true;
+
+    for(auto & queue : queues){
+        done &= queue.size_approx()==0;
+    }
+
+    return done;
+}
+void start_final(int n_piles) {
+
+    vector<vector<bool>> history;
+    while (true){
+        auto ret = queues[n_piles-1].wait_dequeue_timed(history, std::chrono::milliseconds(500));
+
+        if (ret){
+            print_piles(history);
+            cout<<endl;
+        }
+        if ((!ret) && (is_done())) return;
+    }
+
+
+}
+
+void monitor(){
+    while (true){
+        system("clear");
+        for(int i=0; i<queues.size();i++){
+            std::cout<<i<<" "<<queues[i].size_approx()<<endl;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // sleep for 1 second
+        if (is_done()){
+            return;
+        }
+    }
+
 }
