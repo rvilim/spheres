@@ -11,8 +11,8 @@ using namespace std;
 
 extern const int sums[];
 extern const int cubes[];
-extern vector<BlockingConcurrentQueue<vector<vector<bool>>>> queues;
-extern vector<vector<bool>> assigned_piles;
+extern vector<BlockingConcurrentQueue<vector<vector<int>>>> queues;
+extern vector<vector<int>> assigned_piles;
 extern vector<int> assigned_remaining;
 extern bool stop;
 

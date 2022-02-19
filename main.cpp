@@ -6,13 +6,13 @@
 #include <thread>
 
 using namespace std;
-vector<BlockingConcurrentQueue<vector<vector<bool>>>> queues;
-vector<vector<bool>> assigned_piles;
+vector<BlockingConcurrentQueue<vector<vector<int>>>> queues;
+vector<vector<int>> assigned_piles;
 vector<int> assigned_remaining;
 
 int main() {
-    const int n_cubes=53;
-    const int n_piles=9;
+    const int n_cubes=47;
+    const int n_piles=8;
 
     assigned_piles = init_distribution(n_cubes, n_piles);
 
@@ -23,9 +23,9 @@ int main() {
         return 1;
     }
 
-    vector<bool> pile(n_cubes, false);
-    vector<bool> disallowed(n_cubes, false);
-    vector<vector<bool>> history;
+    vector<int> pile(n_cubes, false);
+    vector<int> disallowed(n_cubes, false);
+    vector<vector<int>> history;
 
     for(int i=0;i<n_piles;i++){
         queues.emplace_back();
@@ -40,19 +40,19 @@ int main() {
         pile_threads.emplace_back(start_thread,assigned_remaining[i+1], n_piles, n_cubes, i, i+1, assigned_piles[i+1]);
     }
 
-    auto m = thread(monitor);
+//    auto m = thread(monitor);
 
     for(auto & pile_thread : pile_threads){
         pile_thread.join();
     }
-    m.join();
+//    m.join();
 
     auto stop = chrono::high_resolution_clock::now();
     auto duration = duration_cast<chrono::milliseconds>(stop-start);
 
     cout<<endl<<"Completed in "<<duration.count()<<" milliseconds"<<endl;
 
-    vector<vector<bool>> piles;
+    vector<vector<int>> piles;
     if (queues[n_piles-1].try_dequeue(piles)){
         print_piles(piles);
     }else{

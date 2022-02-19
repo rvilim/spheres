@@ -13,7 +13,7 @@ const int sums[100] = {1, 9, 36, 100, 225, 441, 784, 1296, 2025, 3025, 4356, 608
 const int cubes[100] = {1, 8, 27, 64, 125, 216, 343, 512, 729, 1000, 1331, 1728, 2197, 2744, 3375, 4096, 4913, 5832, 6859, 8000, 9261, 10648, 12167, 13824, 15625, 17576, 19683, 21952, 24389, 27000, 29791, 32768, 35937, 39304, 42875, 46656, 50653, 54872, 59319, 64000, 68921, 74088, 79507, 85184, 91125, 97336, 103823, 110592, 117649, 125000, 132651, 140608, 148877, 157464, 166375, 175616, 185193, 195112, 205379, 216000, 226981, 238328, 250047, 262144, 274625, 287496, 300763, 314432, 328509, 343000, 357911, 373248, 389017, 405224, 421875, 438976, 456533, 474552, 493039, 512000, 531441, 551368, 571787, 592704, 614125, 636056, 658503, 681472, 704969, 729000, 753571, 778688, 804357, 830584, 857375, 884736, 912673, 941192, 970299, 1000000};
 bool stop=false;
 
-int sum_pile(vector<bool> pile){
+int sum_pile(vector<int> pile){
     int s=0;
 
     auto n_cubes=pile.size();
@@ -24,7 +24,7 @@ int sum_pile(vector<bool> pile){
     return s;
 }
 
-void print_pile(vector<bool> pile){
+void print_pile(vector<int> pile){
     for(auto p : pile){
         cout<<p;
     }
@@ -32,7 +32,7 @@ void print_pile(vector<bool> pile){
     cout<<endl;
 }
 
-void print_piles(vector<vector<bool>> piles) {
+void print_piles(vector<vector<int>> piles) {
     for(auto p : piles) {
         print_pile(p);
     }
@@ -53,7 +53,7 @@ void print_piles(vector<vector<bool>> piles) {
 }
 
 void make_pile(int target, int remaining, int pos,
-               vector<bool> &pile, vector<bool> &disallowed, vector<vector<bool>> &history,
+               vector<int> &pile, vector<int> &disallowed, vector<vector<int>> &history,
                int queue_index,
                int n_piles, int n_cubes){
 
@@ -66,7 +66,7 @@ void make_pile(int target, int remaining, int pos,
     if ((not disallowed[pos]) && cube==target) { // Success! we have a pile
         pile[pos] = true;
 
-        vector<vector<bool>> result(history);
+        vector<vector<int>> result(history);
         result.emplace_back(pile);
         queues[queue_index].enqueue(result);
 
@@ -100,8 +100,8 @@ void make_pile(int target, int remaining, int pos,
 }
 
 
-vector<bool> make_disallowed(vector<vector<bool>> &history){
-    vector<bool> disallowed=history[0];
+vector<int> make_disallowed(vector<vector<int>> &history){
+    vector<int> disallowed=history[0];
 
     for (int i=1; i<history.size(); i++){
         for(int j=0; j<disallowed.size(); j++){
@@ -113,10 +113,10 @@ vector<bool> make_disallowed(vector<vector<bool>> &history){
 }
 
 
-vector<vector<bool>> init_distribution(int n_cubes, int n_piles){
+vector<vector<int>> init_distribution(int n_cubes, int n_piles){
     int target = sums[n_cubes-1]/n_piles;
 
-    vector<vector<bool>> piles(n_piles, vector<bool>(n_cubes, false));
+    vector<vector<int>> piles(n_piles, vector<int>(n_cubes, false));
     piles[0][n_cubes-1]=true;
 
     for (int pile_num=1; pile_num<n_piles; pile_num++){
@@ -133,7 +133,7 @@ vector<vector<bool>> init_distribution(int n_cubes, int n_piles){
     return piles;
 }
 
-vector<int> init_remaining(int n_cubes, int n_piles, vector<vector<bool>> piles){
+vector<int> init_remaining(int n_cubes, int n_piles, vector<vector<int>> piles){
 
     vector<int> remaining={};
 
@@ -144,7 +144,7 @@ vector<int> init_remaining(int n_cubes, int n_piles, vector<vector<bool>> piles)
     return remaining;
 }
 
-int init_pos(vector<vector<bool>> piles){
+int init_pos(vector<vector<int>> piles){
     int pos=0;
     auto it = piles.rbegin();
 
@@ -159,24 +159,24 @@ int init_pos(vector<vector<bool>> piles){
     }
 }
 
-void start_source(int target, int n_piles, int n_cubes, vector<bool> assigned_pile){
+void start_source(int target, int n_piles, int n_cubes, vector<int> assigned_pile){
     auto remaining = sums[n_cubes-1];
 
-    vector<bool> disallowed(n_cubes, false);
-    vector<vector<bool>> history;
+    vector<int> disallowed(n_cubes, false);
+    vector<vector<int>> history;
 
     make_pile(target, remaining,n_cubes-2, assigned_pile, disallowed, history, 0, n_piles, n_cubes);
 
 }
 
-void start_thread(int target, int n_piles, int n_cubes, int source_queue, int dest_queue, vector<bool>assigned_pile){
+void start_thread(int target, int n_piles, int n_cubes, int source_queue, int dest_queue, vector<int>assigned_pile){
     auto start_pos = init_pos(assigned_piles);
 
     while(true){
         if (is_done()) return;
 
-        vector<vector<bool>> history;
-        auto ret = queues[source_queue].wait_dequeue_timed(history, std::chrono::milliseconds(100));
+        vector<vector<int>> history;
+        auto ret = queues[source_queue].wait_dequeue_timed(history, std::chrono::milliseconds(10));
 
         if ((!ret) && (is_done())) return;
 
