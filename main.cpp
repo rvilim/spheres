@@ -10,13 +10,15 @@ vector<BlockingConcurrentQueue<vector<vector<int>>>> queues;
 vector<vector<int>> assigned_piles;
 vector<int> assigned_remaining;
 
+int n_cubes=47;
+int n_piles=8;
+
 int main() {
-    const int n_cubes=47;
-    const int n_piles=8;
+    //A(10) 23 seconds
 
-    assigned_piles = init_distribution(n_cubes, n_piles);
+    assigned_piles = init_distribution();
 
-    assigned_remaining = init_remaining( n_cubes,  n_piles, assigned_piles);
+    assigned_remaining = init_remaining(assigned_piles);
 
     if (sums[n_cubes-1]%n_piles!=0){
         cout<<"The sum of the first "<<n_cubes<<" cubes is not divisible by "<<n_piles<<". Not Possible ☹️"<<endl;
@@ -34,10 +36,10 @@ int main() {
     vector<thread> pile_threads;
     auto start = chrono::high_resolution_clock::now();
 
-    pile_threads.emplace_back(start_source, assigned_remaining[0], n_piles, n_cubes,  assigned_piles[0]);
+    pile_threads.emplace_back(start_source, assigned_remaining[0],  assigned_piles[0]);
 
     for(int i=0; i<=n_piles-2;i++){
-        pile_threads.emplace_back(start_thread,assigned_remaining[i+1], n_piles, n_cubes, i, i+1, assigned_piles[i+1]);
+        pile_threads.emplace_back(start_thread,assigned_remaining[i+1], i, i+1, assigned_piles[i+1]);
     }
 
 //    auto m = thread(monitor);

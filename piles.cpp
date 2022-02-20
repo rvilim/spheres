@@ -82,45 +82,44 @@ int get_next_pos(int target, int pos){
     return pos-1;
 }
 
+void success(int pos, int queue_index, vector<int> &pile, vector<vector<int>> &history){
+    pile[pos] = true;
+
+    vector<vector<int>> result(history);
+    result.emplace_back(pile);
+    queues[queue_index].enqueue(result);
+
+    if(queue_index==n_piles-1){
+        stop=true;
+    }
+    pile[pos] = false;
+}
 
 void make_pile(int target, int pos,
                vector<int> &pile, vector<int> &disallowed, vector<vector<int>> &history,
-               int queue_index,
-               int n_piles, int n_cubes){
-
-    auto cube=cubes[pos];
+               int queue_index){
 
     if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
         if (pos==0) return;
-        make_pile(target, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
+        make_pile(target, pos - 1, pile, disallowed, history, queue_index);
         return;
     }
 
-    if ((cube==target) && (not disallowed[pos])) { // Success! we have a pile
-        pile[pos] = true;
-
-        vector<vector<int>> result(history);
-        result.emplace_back(pile);
-        queues[queue_index].enqueue(result);
-
-        if(queue_index==n_piles-1){
-            stop=true;
-        }
-        pile[pos] = false;
+    if (cubes[pos]==target) { // Success! we have a pile
+        success( pos,  queue_index, pile, history);
         return;
     }
 
-    if (pos==0) return;
-    if (is_done()) return;
+    if ((pos==0) || is_done()) return;
 
-     // Call the function again with the bit in question both set and unset
-    if (target > cube) {
+    // Call the function again with the bit in question both set and unset
+    if (target-cubes[pos]>0) {
         pile[pos] = true;
-        make_pile(target - cube, pos-1, pile, disallowed, history, queue_index, n_piles, n_cubes);
+        make_pile(target-cubes[pos], pos-1, pile, disallowed, history, queue_index);
         pile[pos] = false;
     }
+    make_pile(target, pos-1, pile, disallowed, history, queue_index);
 
-    make_pile(target, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
 }
 
 
@@ -137,7 +136,7 @@ vector<int> make_disallowed(vector<vector<int>> &history){
 }
 
 
-vector<vector<int>> init_distribution(int n_cubes, int n_piles){
+vector<vector<int>> init_distribution(){
     int target = sums[n_cubes-1]/n_piles;
 
     vector<vector<int>> piles(n_piles, vector<int>(n_cubes, false));
@@ -157,7 +156,7 @@ vector<vector<int>> init_distribution(int n_cubes, int n_piles){
     return piles;
 }
 
-vector<int> init_remaining(int n_cubes, int n_piles, vector<vector<int>> piles){
+vector<int> init_remaining(vector<vector<int>> piles){
 
     vector<int> remaining={};
 
@@ -183,29 +182,29 @@ int init_pos(vector<vector<int>> piles){
     }
 }
 
-void start_source(int target, int n_piles, int n_cubes, vector<int> assigned_pile){
+void start_source(int target, vector<int> assigned_pile){
     vector<int> disallowed(n_cubes, false);
     vector<vector<int>> history;
 
-    make_pile(target,n_cubes-2, assigned_pile, disallowed, history, 0, n_piles, n_cubes);
+    make_pile(target,n_cubes-2, assigned_pile, disallowed, history, 0);
 
 }
 
-void start_thread(int target, int n_piles, int n_cubes, int source_queue, int dest_queue, vector<int>assigned_pile){
+void start_thread(int target, int source_queue, int dest_queue, vector<int>assigned_pile){
     auto start_pos = init_pos(assigned_piles);
 
     while(true){
         if (is_done()) return;
 
         vector<vector<int>> history;
-        auto ret = queues[source_queue].wait_dequeue_timed(history, std::chrono::milliseconds(10));
+        auto ret = queues[source_queue].wait_dequeue_timed(history, std::chrono::milliseconds(1));
 
         if ((!ret) && (is_done())) return;
 
         if (ret){
             auto disallowed = make_disallowed(history);
 
-            make_pile(target,start_pos, assigned_pile, disallowed, history, dest_queue, n_piles, n_cubes);
+            make_pile(target,start_pos, assigned_pile, disallowed, history, dest_queue);
         }
 
     }
