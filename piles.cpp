@@ -83,26 +83,22 @@ int get_next_pos(int target, int pos){
 }
 
 
-void make_pile(int target, int remaining, int pos,
+void make_pile(int target, int pos,
                vector<int> &pile, vector<int> &disallowed, vector<vector<int>> &history,
                int queue_index,
                int n_piles, int n_cubes){
 
     auto cube=cubes[pos];
 
-//    cout<<remaining<<" "<<target<<endl;
-//    if (remaining<target){ // If there is no way we can construct a pile from the remaining cubes, return
-//        return;
-//    }
-
     if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
         if (pos==0) return;
-        make_pile(target, remaining, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
+        make_pile(target, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
         return;
     }
 
     if ((cube==target) && (not disallowed[pos])) { // Success! we have a pile
         pile[pos] = true;
+
         vector<vector<int>> result(history);
         result.emplace_back(pile);
         queues[queue_index].enqueue(result);
@@ -120,11 +116,11 @@ void make_pile(int target, int remaining, int pos,
      // Call the function again with the bit in question both set and unset
     if (target > cube) {
         pile[pos] = true;
-        make_pile(target - cube, remaining-cube, pos-1, pile, disallowed, history, queue_index, n_piles, n_cubes);
+        make_pile(target - cube, pos-1, pile, disallowed, history, queue_index, n_piles, n_cubes);
         pile[pos] = false;
     }
 
-    make_pile(target, remaining, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
+    make_pile(target, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
 }
 
 
@@ -188,12 +184,10 @@ int init_pos(vector<vector<int>> piles){
 }
 
 void start_source(int target, int n_piles, int n_cubes, vector<int> assigned_pile){
-    auto remaining = sums[n_cubes-1];
-
     vector<int> disallowed(n_cubes, false);
     vector<vector<int>> history;
 
-    make_pile(target, remaining,n_cubes-2, assigned_pile, disallowed, history, 0, n_piles, n_cubes);
+    make_pile(target,n_cubes-2, assigned_pile, disallowed, history, 0, n_piles, n_cubes);
 
 }
 
@@ -211,7 +205,7 @@ void start_thread(int target, int n_piles, int n_cubes, int source_queue, int de
         if (ret){
             auto disallowed = make_disallowed(history);
 
-            make_pile(target, sums[n_cubes]- sum_pile(disallowed),start_pos, assigned_pile, disallowed, history, dest_queue, n_piles, n_cubes);
+            make_pile(target,start_pos, assigned_pile, disallowed, history, dest_queue, n_piles, n_cubes);
         }
 
     }

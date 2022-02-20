@@ -14,7 +14,7 @@ using namespace moodycamel;
 void print_pile(vector<int> pile);
 void print_piles(vector<vector<int>> piles);
 
-void make_pile(int target, int remaining, int pos,
+void make_pile(int target, int pos,
                vector<int> &pile, vector<int> &disallowed, vector<vector<int>> &history,
                int queue_index, int n_piles, int n_cubes);
 int sum_pile(vector<int> pile);
