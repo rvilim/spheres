@@ -90,9 +90,10 @@ void make_pile(int target, int remaining, int pos,
 
     auto cube=cubes[pos];
 
-    if (remaining<target){ // If there is no way we can construct a pile from the remaining cubes, return
-        return;
-    }
+//    cout<<remaining<<" "<<target<<endl;
+//    if (remaining<target){ // If there is no way we can construct a pile from the remaining cubes, return
+//        return;
+//    }
 
     if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
         if (pos==0) return;
@@ -117,13 +118,12 @@ void make_pile(int target, int remaining, int pos,
     if (is_done()) return;
 
      // Call the function again with the bit in question both set and unset
-    if (target > cube){
-        int next_pos=pos-1;
-
+    if (target > cube) {
         pile[pos] = true;
-        make_pile(target - cube, remaining - cube, next_pos, pile, disallowed, history, queue_index, n_piles, n_cubes);
+        make_pile(target - cube, remaining-cube, pos-1, pile, disallowed, history, queue_index, n_piles, n_cubes);
         pile[pos] = false;
     }
+
     make_pile(target, remaining, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
 }
 
