@@ -5,6 +5,7 @@
 #include "piles.h"
 #include "defs.h"
 #include <cstdlib>
+#include <math.h>
 
 using namespace std;
 using namespace moodycamel;
@@ -52,6 +53,36 @@ void print_piles(vector<vector<int>> piles) {
     cout<<endl;
 }
 
+
+int icbrt2(unsigned x) {
+    int s;
+    unsigned y, b, y2;
+
+    y2 = 0;
+    y = 0;
+    for (s = 30; s >= 0; s = s - 3) {
+        y2 = 4*y2;
+        y = 2*y;
+        b = (3*(y2 + y) + 1) << s;
+        if (x >= b) {
+            x = x - b;
+            y2 = y2 + 2*y + 1;
+            y = y + 1;
+        }
+    }
+    return y;
+}
+
+int get_next_pos(int target, int pos){
+    for(int i=0; i<pos; i++){
+        if ((cubes[i]<=target) &&(cubes[i+1]>target)){
+            return i;
+        }
+    }
+    return pos-1;
+}
+
+
 void make_pile(int target, int remaining, int pos,
                vector<int> &pile, vector<int> &disallowed, vector<vector<int>> &history,
                int queue_index,
@@ -63,9 +94,14 @@ void make_pile(int target, int remaining, int pos,
         return;
     }
 
-    if ((not disallowed[pos]) && cube==target) { // Success! we have a pile
-        pile[pos] = true;
+    if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
+        if (pos==0) return;
+        make_pile(target, remaining, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
+        return;
+    }
 
+    if ((cube==target) && (not disallowed[pos])) { // Success! we have a pile
+        pile[pos] = true;
         vector<vector<int>> result(history);
         result.emplace_back(pile);
         queues[queue_index].enqueue(result);
@@ -73,30 +109,22 @@ void make_pile(int target, int remaining, int pos,
         if(queue_index==n_piles-1){
             stop=true;
         }
-
         pile[pos] = false;
         return;
     }
 
+    if (pos==0) return;
     if (is_done()) return;
 
-    if (pos==0){ // Can't find a pile
-        return;
-    }else{ // Hope is still alive
+     // Call the function again with the bit in question both set and unset
+    if (target > cube){
+        int next_pos=pos-1;
 
-        if (disallowed[pos]){ // If the one we are on is disallowed, just skip it.
-            make_pile(target, remaining, pos-1, pile, disallowed, history, queue_index, n_piles, n_cubes);
-        } else {
-            // Call the function again with the bit in question both set and unset
-
-            if (target > cube){
-                pile[pos] = true;
-                make_pile(target - cube, remaining - cube, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
-                pile[pos] = false;
-            }
-            make_pile(target, remaining, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
-        }
+        pile[pos] = true;
+        make_pile(target - cube, remaining - cube, next_pos, pile, disallowed, history, queue_index, n_piles, n_cubes);
+        pile[pos] = false;
     }
+    make_pile(target, remaining, pos - 1, pile, disallowed, history, queue_index, n_piles, n_cubes);
 }
 
 
@@ -183,7 +211,7 @@ void start_thread(int target, int n_piles, int n_cubes, int source_queue, int de
         if (ret){
             auto disallowed = make_disallowed(history);
 
-            make_pile(target, target,start_pos, assigned_pile, disallowed, history, dest_queue, n_piles, n_cubes);
+            make_pile(target, sums[n_cubes]- sum_pile(disallowed),start_pos, assigned_pile, disallowed, history, dest_queue, n_piles, n_cubes);
         }
 
     }
