@@ -10,8 +10,8 @@ vector<BlockingConcurrentQueue<vector<vector<int>>>> queues;
 vector<vector<int>> assigned_piles;
 vector<int> assigned_remaining;
 
-int n_cubes=23;
-int n_piles=3;
+int n_cubes=47;
+int n_piles=8;
 
 int main() {
     //A(10) 23 seconds
