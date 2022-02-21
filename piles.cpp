@@ -54,25 +54,6 @@ void print_piles(vector<vector<int>> piles) {
 }
 
 
-int icbrt2(unsigned x) {
-    int s;
-    unsigned y, b, y2;
-
-    y2 = 0;
-    y = 0;
-    for (s = 30; s >= 0; s = s - 3) {
-        y2 = 4*y2;
-        y = 2*y;
-        b = (3*(y2 + y) + 1) << s;
-        if (x >= b) {
-            x = x - b;
-            y2 = y2 + 2*y + 1;
-            y = y + 1;
-        }
-    }
-    return y;
-}
-
 int get_next_pos(int target, int pos){
     for(int i=0; i<pos; i++){
         if ((cubes[i]<=target) &&(cubes[i+1]>target)){
@@ -82,8 +63,14 @@ int get_next_pos(int target, int pos){
     return pos-1;
 }
 
-void success(int pos, int queue_index, vector<int> &pile, vector<vector<int>> &history){
-    pile[pos] = true;
+void success(int pos, int queue_index, vector<int> &interleaved, vector<vector<int>> &history){
+    interleaved[2*pos] = true;
+
+    vector<int> pile(n_cubes, false);
+
+    for(int i=0;i<pile.size();i+=1){
+        pile[i]=interleaved[2*i];
+    }
 
     vector<vector<int>> result(history);
     result.emplace_back(pile);
@@ -92,21 +79,22 @@ void success(int pos, int queue_index, vector<int> &pile, vector<vector<int>> &h
     if(queue_index==n_piles-1){
         stop=true;
     }
-    pile[pos] = false;
+    interleaved[2*pos] = false;
 }
 
 void make_pile(int target, int pos,
-               vector<int> &pile, vector<int> &disallowed, vector<vector<int>> &history,
+               vector<int> &interleaved, vector<vector<int>> &history,
                int queue_index){
+    auto disallowed = interleaved[2*pos+1];
 
-    if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
+    if (disallowed) { // If the one we are on is disallowed, just skip it.
         if (pos==0) return;
-        make_pile(target, pos - 1, pile, disallowed, history, queue_index);
+        make_pile(target, pos - 1, interleaved, history, queue_index);
         return;
     }
 
     if (cubes[pos]==target) { // Success! we have a pile
-        success( pos,  queue_index, pile, history);
+        success( pos,  queue_index, interleaved, history);
         return;
     }
 
@@ -114,11 +102,11 @@ void make_pile(int target, int pos,
 
     // Call the function again with the bit in question both set and unset
     if (target-cubes[pos]>0) {
-        pile[pos] = true;
-        make_pile(target-cubes[pos], pos-1, pile, disallowed, history, queue_index);
-        pile[pos] = false;
+        interleaved[2*pos] = true;
+        make_pile(target-cubes[pos], pos-1, interleaved, history, queue_index);
+        interleaved[2*pos] = false;
     }
-    make_pile(target, pos-1, pile, disallowed, history, queue_index);
+    make_pile(target, pos-1, interleaved, history, queue_index);
 
 }
 
@@ -182,11 +170,22 @@ int init_pos(vector<vector<int>> piles){
     }
 }
 
+void interleave(vector<int> &pile, vector<int> &disallowed, vector<int> &interleaved){
+    for(int i=0;i<pile.size();i++){
+        interleaved[2*i]=pile[i];
+        interleaved[2*i+1]=disallowed[i];
+    }
+
+}
 void start_source(int target, vector<int> assigned_pile){
     vector<int> disallowed(n_cubes, false);
     vector<vector<int>> history;
 
-    make_pile(target,n_cubes-2, assigned_pile, disallowed, history, 0);
+    vector<int> interleaved(2*n_cubes, false);
+
+    interleave(assigned_pile, disallowed, interleaved);
+
+    make_pile(target,n_cubes-2, interleaved, history, 0);
 
 }
 
@@ -202,9 +201,13 @@ void start_thread(int target, int source_queue, int dest_queue, vector<int>assig
         if ((!ret) && (is_done())) return;
 
         if (ret){
+
             auto disallowed = make_disallowed(history);
 
-            make_pile(target,start_pos, assigned_pile, disallowed, history, dest_queue);
+            vector<int> interleaved(2*n_cubes, false);
+            interleave(assigned_pile, disallowed, interleaved);
+
+            make_pile(target,start_pos, interleaved, history, dest_queue);
         }
 
     }
