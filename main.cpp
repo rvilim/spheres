@@ -4,7 +4,7 @@
 #include "piles.h"
 #include <chrono>
 #include <thread>
-
+#include "trei.h"
 using namespace std;
 vector<BlockingConcurrentQueue<vector<vector<int>>>> queues;
 vector<vector<int>> assigned_piles;
@@ -16,6 +16,9 @@ int n_piles=8;
 int main() {
     //A(10) 23 seconds
 
+//    auto d = compile_disallowed(n3);
+
+//    print_pile(d);
     assigned_piles = init_distribution();
 
     assigned_remaining = init_remaining(assigned_piles);
