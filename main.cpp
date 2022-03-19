@@ -4,22 +4,36 @@
 #include "piles.h"
 #include <chrono>
 #include <thread>
-#include "trei.h"
+#include <sstream>
+
 using namespace std;
-vector<BlockingConcurrentQueue<vector<vector<int>>>> queues;
-vector<vector<int>> assigned_piles;
-vector<int> assigned_remaining;
+vector<BlockingConcurrentQueue<vector<int>>> queues;
 
-int n_cubes=47;
-int n_piles=8;
+int n_cubes=77;
+int n_piles=13;
 
-int main() {
-    //A(10) 23 seconds
+int main(int argc,char *argv[]) {
 
-//    auto d = compile_disallowed(n3);
+    std::istringstream arg1(argv[1]);
+    std::istringstream arg2(argv[2]);
 
-//    print_pile(d);
+    if (!(arg1 >> n_piles)) {
+        std::cerr << "Invalid number: " << argv[1] << '\n';
+    } else if (!arg1.eof()) {
+        std::cerr << "Trailing characters after number: " << argv[1] << '\n';
+    }
+
+    if (!(arg2 >> n_cubes)) {
+        std::cerr << "Invalid number: " << argv[2] << '\n';
+    } else if (!arg2.eof()) {
+        std::cerr << "Trailing characters after number: " << argv[2] << '\n';
+    }
+
+    vector<vector<int>> assigned_piles;
+    vector<int> assigned_remaining;
+
     assigned_piles = init_distribution();
+    auto start_pos = init_pos(assigned_piles);
 
     assigned_remaining = init_remaining(assigned_piles);
 
@@ -30,19 +44,21 @@ int main() {
 
     vector<int> pile(n_cubes, false);
     vector<int> disallowed(n_cubes, false);
-    vector<vector<int>> history;
+    vector<short> history;
+    vector<thread> pile_threads;
 
     for(int i=0;i<n_piles;i++){
         queues.emplace_back();
     }
 
-    vector<thread> pile_threads;
     auto start = chrono::high_resolution_clock::now();
 
     pile_threads.emplace_back(start_source, assigned_remaining[0],  assigned_piles[0]);
 
     for(int i=0; i<=n_piles-2;i++){
-        pile_threads.emplace_back(start_thread,assigned_remaining[i+1], i, i+1, assigned_piles[i+1]);
+        for(int n=0; n<5; n++){
+            pile_threads.emplace_back(start_thread,assigned_remaining[i+1], i, i+1, assigned_piles[i+1], start_pos);
+        }
     }
 
 //    auto m = thread(monitor);
@@ -57,7 +73,8 @@ int main() {
 
     cout<<endl<<"Completed in "<<duration.count()<<" milliseconds"<<endl;
 
-    vector<vector<int>> piles;
+    vector<int> piles;
+
     if (queues[n_piles-1].try_dequeue(piles)){
         print_piles(piles);
     }else{
