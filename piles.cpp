@@ -5,6 +5,8 @@
 #include "piles.h"
 #include "defs.h"
 #include <cstdlib>
+#include <fstream>
+#include <assert.h>
 
 using namespace std;
 using namespace moodycamel;
@@ -14,14 +16,14 @@ const int cubes[100] = {1, 8, 27, 64, 125, 216, 343, 512, 729, 1000, 1331, 1728,
 
 bool stop=false;
 
-int sum_pile(vector<int> pile){
-    int s=0;
+int calc_remaining(vector<int> piles, int pile){
+    int remaining=sums[n_cubes-1];
 
-    for(int pos=0; pos<n_cubes; pos++){
-        s+=pile[pos]*cubes[pos];
-    }
-
-    return s;
+    for (int pos = 0; pos < piles.size(); pos++)
+        if (piles[pos]==pile) {
+            remaining -= cubes[pos];
+        };
+    return remaining;
 }
 
 void print_piles(vector<int> disallowed) {
@@ -40,6 +42,180 @@ void print_piles(vector<int> disallowed) {
     }
     cout<<endl;
 }
+
+
+vector<int> init_distribution(){
+    int target = sums[n_cubes-1]/n_piles;
+
+    vector<int> piles(n_cubes, 0);
+    piles[n_cubes-1]=1;
+
+    for (int pile=1; pile<n_piles;pile++){
+        if (cubes[n_cubes-pile]+cubes[n_cubes-pile-1]>target){
+
+            piles[n_cubes-pile]=pile;
+
+        }
+    }
+
+    return piles;
+}
+
+
+void success(int pos, int pile_num, vector<int> pile){
+    pile[pos] = pile_num;
+    dest_queue.enqueue(pile);
+
+    pile[pos] = 0;
+}
+
+
+void make_pile(int target, int remaining, int pos, int pile_num, vector<int> &pile){
+
+    if (pile[pos]!=0) { // If the one we are on is disallowed, just skip it.
+        if (pos==0) return;
+        make_pile(target, remaining, pos - 1, pile_num, pile);
+        return;
+    }
+
+    if (target>remaining) {
+        return;
+    }
+
+    if (cubes[pos]==target) { // Success! we have a pile
+//        success( pos,  queue_index, pile, disallowed);
+//        print_piles(pile);
+        success( pos,  pile_num, pile);
+        return;
+    }
+
+    if ((pos==0) || is_done()) return;
+//    auto next_pos = next_allowed(pos, remaining, disallowed);
+//    if (next_pos==-1) return
+
+    // Call the function again with the bit in question both set and unset
+    if (target-cubes[pos]>0) {
+        pile[pos] = pile_num;
+        make_pile(target-cubes[pos], remaining-cubes[pos], pos-1, pile_num, pile);
+        pile[pos] = 0;
+    }
+    make_pile(target, remaining-cubes[pos], pos-1, pile_num, pile);
+
+}
+
+
+bool is_done(){
+    return stop;
+}
+
+int sum_pile(vector<int> pile, int pile_num){
+    int s=0;
+
+    for(int pos=0; pos<n_cubes; pos++){
+        if (pile[pos]==pile_num) {
+            s+=cubes[pos];
+        }
+    }
+
+    return s;
+}
+
+void solve(int pile_num){
+    vector<int> pile;
+
+    while(true){
+        auto ret = source_queue.wait_dequeue_timed(pile, std::chrono::milliseconds(1000));
+
+        if (!ret) {
+            stop=true;
+            return;
+        }
+
+        auto remaining = calc_remaining(pile,1);
+        auto target = sums[n_cubes-1]/n_piles - sum_pile(pile, pile_num);
+
+        make_pile(target, remaining, n_cubes-1, pile_num, pile);
+    }
+}
+
+void monitor(){
+    while (true){
+        system("clear");
+        cout<<"source queue: "<<source_queue.size_approx()<<endl;
+        cout<<"dest queue: "<<dest_queue.size_approx()<<endl;
+
+        if (is_done()){
+            return;
+        }else{
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+}
+
+void read(std::string filename, int pile_num) {
+    std::ifstream in(filename, std::ios::binary);
+
+    int n_piles_file, n_cubes_file, pile_num_file;
+
+
+    in.read(reinterpret_cast<char*>(&n_piles_file), sizeof(n_piles_file));
+    in.read(reinterpret_cast<char*>(&n_cubes_file), sizeof(n_cubes_file));
+    in.read(reinterpret_cast<char*>(&pile_num_file), sizeof(pile_num_file));
+
+    cout<<n_cubes_file<<" "<<n_piles_file<<" "<<pile_num_file<<flush<<endl;
+    assert(n_piles_file==n_piles);
+    assert(n_cubes_file==n_cubes);
+    assert(pile_num_file==pile_num-1);
+
+    vector<int> pile(n_cubes, 0);
+
+    while (true){
+        if(source_queue.size_approx()<100000) {
+            if (in.read(reinterpret_cast<char *>(&pile[0]), sizeof(int) * n_cubes)) {
+                source_queue.enqueue(pile);
+            } else {
+                return;
+            }
+        }else{
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+}
+
+void write(std::string filename, int pile_num){
+    std::ofstream file(filename, std::ios::binary);
+
+    file.write(reinterpret_cast<const char *>(&n_piles), sizeof(n_piles));
+    file.write(reinterpret_cast<const char *>(&n_cubes), sizeof(n_cubes));
+    file.write(reinterpret_cast<const char *>(&pile_num), sizeof(pile_num));
+
+    vector<int> pile;
+
+    int sols;
+
+    while (true){
+        auto ret = dest_queue.wait_dequeue_timed(pile, std::chrono::milliseconds(1000));
+
+        if ((!ret) && (is_done())) {
+            return;
+        }
+
+        if (ret){
+            file.write(reinterpret_cast<const char*>(&pile[0]), sizeof(int)*n_cubes);
+        }
+    }
+}
+/*
+int sum_pile(vector<int> pile){
+    int s=0;
+
+    for(int pos=0; pos<n_cubes; pos++){
+        s+=pile[pos]*cubes[pos];
+    }
+
+    return s;
+}
+
 
 
 
@@ -65,38 +241,7 @@ void success(int pos, int queue_index, vector<int> &pile, vector<int> &disallowe
     pile[pos] = false;
 }
 
-void make_pile(int target, int remaining, int pos,
-               vector<int> &pile, vector<int> &disallowed, int queue_index){
 
-//    cout<<target<<endl;
-    if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
-        if (pos==0) return;
-        make_pile(target, remaining, pos - 1, pile, disallowed, queue_index);
-        return;
-    }
-
-    if (target>remaining) {
-        return;
-    }
-
-    if (cubes[pos]==target) { // Success! we have a pile
-        success( pos,  queue_index, pile, disallowed);
-        return;
-    }
-
-    if ((pos==0) || is_done()) return;
-//    auto next_pos = next_allowed(pos, remaining, disallowed);
-//    if (next_pos==-1) return
-
-    // Call the function again with the bit in question both set and unset
-    if (target-cubes[pos]>0) {
-        pile[pos] = true;
-        make_pile(target-cubes[pos], remaining-cubes[pos], pos-1,  pile, disallowed,  queue_index);
-        pile[pos] = false;
-    }
-    make_pile(target, remaining-cubes[pos], pos-1, pile, disallowed,  queue_index);
-
-}
 
 int next_allowed(int pos, int &remaining, vector<int> &disallowed){
     for(int i=pos-1;i>=0;i--){
@@ -104,26 +249,6 @@ int next_allowed(int pos, int &remaining, vector<int> &disallowed){
         if (!disallowed[i]) return i;
     }
     return -1;
-}
-
-vector<vector<int>> init_distribution(){
-    int target = sums[n_cubes-1]/n_piles;
-
-    vector<vector<int>> piles(n_piles, vector<int>(n_cubes, false));
-    piles[0][n_cubes-1]=true;
-
-    for (int pile_num=1; pile_num<n_piles; pile_num++){
-        // The condition here is that we can place things without loss of generality
-        // as long as two adjacent cubes add up to greater than the target. As soon
-        // as that's not true the smaller could either go in a new pile, or double up
-        // with an already placed pile, and we have to leave it to the main solver to
-        // figure tha one out.
-        if (cubes[n_cubes-pile_num]+cubes[n_cubes-pile_num-1]>target){
-            piles[pile_num][n_cubes-pile_num-1]=true;
-        }
-    }
-
-    return piles;
 }
 
 vector<int> init_remaining(vector<vector<int>> piles){
@@ -158,15 +283,6 @@ void start_source(int target, vector<int> assigned_pile){
 
 }
 
-int calc_remaining(vector<int> disallowed){
-    int remaining=sums[n_cubes-1];
-
-    for (int pos = 0; pos < disallowed.size(); pos++)
-        if (disallowed[pos]) {
-            remaining -= cubes[pos];
-        };
-    return remaining;
-}
 
 void start_thread(int target, int source_queue, int dest_queue, vector<int>assigned_pile, int start_pos){
     while(true){
@@ -185,10 +301,6 @@ void start_thread(int target, int source_queue, int dest_queue, vector<int>assig
     }
 }
 
-bool is_done(){
-    return stop;
-}
-
 void monitor(){
     while (true){
         system("clear");
@@ -201,4 +313,4 @@ void monitor(){
         }
     }
 
-}
+}*/
