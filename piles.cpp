@@ -4,7 +4,6 @@
 #include <chrono>
 #include "piles.h"
 #include "defs.h"
-#include <cstdlib>
 #include <fstream>
 #include <assert.h>
 #include <cinttypes>
@@ -76,11 +75,8 @@ vector<int_fast8_t> init_distribution(){
 }
 
 
-void success(int pos, int pile_num, vector<int_fast8_t> pile, BlockingConcurrentQueue<vector<int_fast8_t>> &dest_queue){
+void success(int pos, int pile_num, vector<int_fast8_t> &pile, BlockingConcurrentQueue<vector<int_fast8_t>> &dest_queue){
     pile[pos] = pile_num;
-//    if(pile_num==7){
-//        print_piles(pile);
-//    }
 
     dest_queue.enqueue(pile);
 
@@ -138,17 +134,13 @@ void solve(int source_queue_idx, int dest_queue_idx, int pile_num){
     vector<int_fast8_t> pile;
 
     while(true){
-//        cout<<pile_num<<endl;
         auto ret = queues[source_queue_idx].wait_dequeue_timed(pile, std::chrono::milliseconds(1000));
         if (is_done()) return;
 
         if (!ret) continue;
-//        if (source_queue_idx==7){
-//            print_piles(pile);
-//        }
+
         auto remaining = calc_remaining(pile,1);
         auto target = sums[n_cubes-1]/n_piles - sum_pile(pile, pile_num);
-//        cout<<remaining<<" "<<target<<" "<<pile_num<<" "<<dest_queue_idx<<endl;
 
         make_pile(target, remaining, n_cubes-1, pile_num, pile, queues[dest_queue_idx]);
     }
