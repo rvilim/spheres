@@ -13,7 +13,8 @@ extern const int sums[];
 extern const int cubes[];
 extern int n_piles;
 extern int n_cubes;
-extern BlockingConcurrentQueue<vector<int>> source_queue, dest_queue;
+
+extern vector<BlockingConcurrentQueue<vector<int_fast8_t>>> queues;
 extern bool stop;
 
 #endif //PILES_DEFS_H

@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <assert.h>
+#include <cinttypes>
+#include <sstream>
 
 using namespace std;
 using namespace moodycamel;
@@ -15,8 +17,11 @@ const int sums[100] = {1, 9, 36, 100, 225, 441, 784, 1296, 2025, 3025, 4356, 608
 const int cubes[100] = {1, 8, 27, 64, 125, 216, 343, 512, 729, 1000, 1331, 1728, 2197, 2744, 3375, 4096, 4913, 5832, 6859, 8000, 9261, 10648, 12167, 13824, 15625, 17576, 19683, 21952, 24389, 27000, 29791, 32768, 35937, 39304, 42875, 46656, 50653, 54872, 59319, 64000, 68921, 74088, 79507, 85184, 91125, 97336, 103823, 110592, 117649, 125000, 132651, 140608, 148877, 157464, 166375, 175616, 185193, 195112, 205379, 216000, 226981, 238328, 250047, 262144, 274625, 287496, 300763, 314432, 328509, 343000, 357911, 373248, 389017, 405224, 421875, 438976, 456533, 474552, 493039, 512000, 531441, 551368, 571787, 592704, 614125, 636056, 658503, 681472, 704969, 729000, 753571, 778688, 804357, 830584, 857375, 884736, 912673, 941192, 970299, 1000000};
 
 bool stop=false;
+unsigned int n_solutions=0;
+unsigned int read_progress=0;
+unsigned int n_records=0;
 
-int calc_remaining(vector<int> piles, int pile){
+int calc_remaining(vector<int_fast8_t> piles, int pile){
     int remaining=sums[n_cubes-1];
 
     for (int pos = 0; pos < piles.size(); pos++)
@@ -26,28 +31,37 @@ int calc_remaining(vector<int> piles, int pile){
     return remaining;
 }
 
-void print_piles(vector<int> disallowed) {
+void print_piles(vector<int_fast8_t> disallowed, string filename="") {
+    ostringstream s;
 
     for(int pile=1; pile<=n_piles;pile++){
         int sum=0;
         for(int i=0; i<disallowed.size(); i++){
             if (pile==disallowed[i]){
-                cout<<"1";
+                s<<"1";
                 sum+=cubes[i];
             } else{
-                cout<<"0";
+                s<<"0";
             }
         }
-        cout<<" "<<sum<<endl;
+        s<<" "<<sum<<endl;
     }
-    cout<<endl;
+    s<<endl;
+
+    if(filename!=""){
+        std::ofstream out(filename);
+        out << s.str();
+        out.close();
+    }else{
+        cout<<s.str();
+    }
 }
 
 
-vector<int> init_distribution(){
+vector<int_fast8_t> init_distribution(){
     int target = sums[n_cubes-1]/n_piles;
 
-    vector<int> piles(n_cubes, 0);
+    vector<int_fast8_t> piles(n_cubes, 0);
     piles[n_cubes-1]=1;
 
     for (int pile=1; pile<n_piles;pile++){
@@ -62,19 +76,23 @@ vector<int> init_distribution(){
 }
 
 
-void success(int pos, int pile_num, vector<int> pile){
+void success(int pos, int pile_num, vector<int_fast8_t> pile, BlockingConcurrentQueue<vector<int_fast8_t>> &dest_queue){
     pile[pos] = pile_num;
+//    if(pile_num==7){
+//        print_piles(pile);
+//    }
+
     dest_queue.enqueue(pile);
 
     pile[pos] = 0;
 }
 
 
-void make_pile(int target, int remaining, int pos, int pile_num, vector<int> &pile){
+void make_pile(int target, int remaining, int pos, int pile_num, vector<int_fast8_t> &pile, BlockingConcurrentQueue<vector<int_fast8_t>> &dest_queue){
 
     if (pile[pos]!=0) { // If the one we are on is disallowed, just skip it.
         if (pos==0) return;
-        make_pile(target, remaining, pos - 1, pile_num, pile);
+        make_pile(target, remaining, pos - 1, pile_num, pile, dest_queue);
         return;
     }
 
@@ -83,23 +101,19 @@ void make_pile(int target, int remaining, int pos, int pile_num, vector<int> &pi
     }
 
     if (cubes[pos]==target) { // Success! we have a pile
-//        success( pos,  queue_index, pile, disallowed);
-//        print_piles(pile);
-        success( pos,  pile_num, pile);
+        success( pos,  pile_num, pile, dest_queue);
         return;
     }
 
     if ((pos==0) || is_done()) return;
-//    auto next_pos = next_allowed(pos, remaining, disallowed);
-//    if (next_pos==-1) return
 
     // Call the function again with the bit in question both set and unset
     if (target-cubes[pos]>0) {
         pile[pos] = pile_num;
-        make_pile(target-cubes[pos], remaining-cubes[pos], pos-1, pile_num, pile);
+        make_pile(target-cubes[pos], remaining-cubes[pos], pos-1, pile_num, pile, dest_queue);
         pile[pos] = 0;
     }
-    make_pile(target, remaining-cubes[pos], pos-1, pile_num, pile);
+    make_pile(target, remaining-cubes[pos], pos-1, pile_num, pile, dest_queue);
 
 }
 
@@ -108,7 +122,7 @@ bool is_done(){
     return stop;
 }
 
-int sum_pile(vector<int> pile, int pile_num){
+int sum_pile(vector<int_fast8_t> pile, int pile_num){
     int s=0;
 
     for(int pos=0; pos<n_cubes; pos++){
@@ -120,59 +134,77 @@ int sum_pile(vector<int> pile, int pile_num){
     return s;
 }
 
-void solve(int pile_num){
-    vector<int> pile;
+void solve(int source_queue_idx, int dest_queue_idx, int pile_num){
+    vector<int_fast8_t> pile;
 
     while(true){
-        auto ret = source_queue.wait_dequeue_timed(pile, std::chrono::milliseconds(1000));
+//        cout<<pile_num<<endl;
+        auto ret = queues[source_queue_idx].wait_dequeue_timed(pile, std::chrono::milliseconds(1000));
+        if (is_done()) return;
 
-        if (!ret) {
-            stop=true;
-            return;
-        }
-
+        if (!ret) continue;
+//        if (source_queue_idx==7){
+//            print_piles(pile);
+//        }
         auto remaining = calc_remaining(pile,1);
         auto target = sums[n_cubes-1]/n_piles - sum_pile(pile, pile_num);
+//        cout<<remaining<<" "<<target<<" "<<pile_num<<" "<<dest_queue_idx<<endl;
 
-        make_pile(target, remaining, n_cubes-1, pile_num, pile);
+        make_pile(target, remaining, n_cubes-1, pile_num, pile, queues[dest_queue_idx]);
     }
 }
 
 void monitor(){
     while (true){
+        if (is_done()) return;
         system("clear");
-        cout<<"source queue: "<<source_queue.size_approx()<<endl;
-        cout<<"dest queue: "<<dest_queue.size_approx()<<endl;
-
-        if (is_done()){
-            return;
-        }else{
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        for(int i=0;i<queues.size();i++) {
+            cout<<i<<" "<<queues[i].size_approx()<<endl;
         }
+        if (is_done()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
+//void monitor(){
+//    while (true){
+//        system("clear");
+//        cout<<"source queue: "<<source_queue.size_approx()<<endl;
+//        cout<<"dest queue: "<<dest_queue.size_approx()<<endl;
+//        cout<<"progress: "<<read_progress-source_queue.size_approx()<<"/"<<n_records<<endl;
+//        cout<<"n_solutions: "<<n_solutions<<endl;
+//
+//        if (is_done()){
+//            return;
+//        }else{
+//            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+//        }
+//    }
+//}
 
-void read(std::string filename, int pile_num) {
+void read_pile(std::string filename, int pile_num, int dest_queue_idx) {
     std::ifstream in(filename, std::ios::binary);
 
-    int n_piles_file, n_cubes_file, pile_num_file;
+    unsigned int n_piles_file, n_cubes_file, pile_num_file, int_size_bytes;
 
-
+    in.read(reinterpret_cast<char*>(&n_records), sizeof(n_records));
     in.read(reinterpret_cast<char*>(&n_piles_file), sizeof(n_piles_file));
     in.read(reinterpret_cast<char*>(&n_cubes_file), sizeof(n_cubes_file));
     in.read(reinterpret_cast<char*>(&pile_num_file), sizeof(pile_num_file));
+    in.read(reinterpret_cast<char*>(&int_size_bytes), sizeof(int_size_bytes));
 
-    cout<<n_cubes_file<<" "<<n_piles_file<<" "<<pile_num_file<<flush<<endl;
+    cout<<n_cubes_file<<" "<<n_piles_file<<" "<<pile_num_file<<" "<<n_records<<flush<<endl;
+
     assert(n_piles_file==n_piles);
     assert(n_cubes_file==n_cubes);
     assert(pile_num_file==pile_num-1);
 
-    vector<int> pile(n_cubes, 0);
+    vector<int_fast8_t> pile(n_cubes, 0);
 
     while (true){
-        if(source_queue.size_approx()<100000) {
-            if (in.read(reinterpret_cast<char *>(&pile[0]), sizeof(int) * n_cubes)) {
-                source_queue.enqueue(pile);
+        if(queues[dest_queue_idx].size_approx()<100000) {
+            if (in.read(reinterpret_cast<char *>(&pile[0]), int_size_bytes * n_cubes)) {
+                read_progress+=1;
+                queues[dest_queue_idx].enqueue(pile);
             } else {
                 return;
             }
@@ -182,27 +214,55 @@ void read(std::string filename, int pile_num) {
     }
 }
 
-void write(std::string filename, int pile_num){
-    std::ofstream file(filename, std::ios::binary);
+void write_pile(int pile_num, int source_queue_idx, std::string filename, bool text) {
+    if (!text) {
+        std::ofstream file(filename, std::ios::binary);
+        vector<int_fast8_t> pile;
 
-    file.write(reinterpret_cast<const char *>(&n_piles), sizeof(n_piles));
-    file.write(reinterpret_cast<const char *>(&n_cubes), sizeof(n_cubes));
-    file.write(reinterpret_cast<const char *>(&pile_num), sizeof(pile_num));
+        using T = typename std::decay<decltype(*pile.begin())>::type;
+        unsigned int int_size_bytes = sizeof(T);
 
-    vector<int> pile;
+        file.write(reinterpret_cast<const char *>(&n_solutions), sizeof(n_solutions));
+        file.write(reinterpret_cast<const char *>(&n_piles), sizeof(n_piles));
+        file.write(reinterpret_cast<const char *>(&n_cubes), sizeof(n_cubes));
+        file.write(reinterpret_cast<const char *>(&pile_num), sizeof(pile_num));
+        file.write(reinterpret_cast<const char *>(&int_size_bytes), sizeof(int_size_bytes));
 
-    int sols;
+        while (true) {
+            auto ret = queues[source_queue_idx].wait_dequeue_timed(pile, std::chrono::milliseconds(1000));
 
-    while (true){
-        auto ret = dest_queue.wait_dequeue_timed(pile, std::chrono::milliseconds(1000));
+            if ((!ret) && (is_done())) {
+                // If we are closing the file, seek to the beginning and write how many solutions we have
+                file.seekp(0);
+                file.write(reinterpret_cast<const char *>(&n_solutions), sizeof(n_solutions));
+                return;
+            }
 
-        if ((!ret) && (is_done())) {
-            return;
+            if (ret) {
+                n_solutions += 1;
+                file.write(reinterpret_cast<const char *>(&pile[0]), sizeof(pile[0]) * n_cubes);
+            }
+        }
+    } else {
+
+        vector<int_fast8_t> pile;
+
+        while (true) {
+            auto ret = queues[source_queue_idx].wait_dequeue_timed(pile, std::chrono::milliseconds(1000));
+
+            if (ret ) {
+                if(text){
+                    print_piles(pile, filename);
+
+                }
+                stop = true;
+
+                return;
+            }
+
         }
 
-        if (ret){
-            file.write(reinterpret_cast<const char*>(&pile[0]), sizeof(int)*n_cubes);
-        }
+
     }
 }
 /*

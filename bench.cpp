@@ -7,7 +7,7 @@
 #include <cmath>
 
 using namespace std;
-vector<BlockingConcurrentQueue<vector<int>>> queues;
+vector<BlockingConcurrentQueue<vector<int_fast8_t>>> queues;
 
 int n_cubes=47;
 int n_piles=8;
@@ -17,7 +17,7 @@ double mean(vector<int> &timing);
 double stddev(vector<int> &timing);
 
 int main() {
-    const unsigned int N = 100;
+    const unsigned int N = 10;
 
     vector<int> timing;
     for(int i=0;i<N;i++){
@@ -49,16 +49,30 @@ double stddev(vector<int> &timing) {
 int run(){
 
     auto assigned_piles = init_distribution();
-    auto assigned_remaining = init_remaining(assigned_piles);
+    vector<int_fast8_t > pile(n_cubes,0);
 
+    auto remaining = calc_remaining(pile,1);
+    auto target = sums[n_cubes-1]/n_piles - sum_pile(pile, 1);
+    queues.emplace_back();
+
+    auto start_time = chrono::high_resolution_clock::now();
+
+    make_pile(target, remaining, n_cubes-1, 1, pile, queues[0]);
+
+
+    auto stop_time = chrono::high_resolution_clock::now();
+    auto duration = duration_cast<chrono::milliseconds>(stop_time-start_time);
+
+    queues.clear();
+    stop=false;
+
+    return duration.count();
+/*
 
     vector<int> pile(n_cubes, false);
     vector<int> disallowed(n_cubes, false);
     vector<short> history;
     vector<thread> pile_threads;
-
-    auto start_pos = init_pos(assigned_piles);
-
 
     for(int i=0;i<n_piles;i++){
         queues.emplace_back();
@@ -83,4 +97,5 @@ int run(){
     stop=false;
 
     return duration.count();
+    */
 }

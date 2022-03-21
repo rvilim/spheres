@@ -6,50 +6,40 @@
 #include <thread>
 #include <sstream>
 #include <string>
+#include <boost/dynamic_bitset.hpp>
+#include <stdlib.h>
 
 using namespace std;
-BlockingConcurrentQueue<vector<int>> source_queue, dest_queue;
+//namespace po = boost::program_options;
 
-int n_cubes=77;
-int n_piles=13;
-int pile_num;
-int work_threads=8;
+vector<BlockingConcurrentQueue<vector<int_fast8_t>>> queues;
 
-string out_file;
-string in_file;
+int n_cubes=-1;
+int n_piles=-1;
+int start_pile=-1;
+int end_pile=-1;
 
-int read_cmd(int argc, char*argv[]);
+int read_cmd(int argc, char* argv[]);
 
-int read_cmd(int argc, char*argv[]){
-    std::istringstream arg1(argv[1]); // n_piles
-    std::istringstream arg2(argv[2]); // n_cubes
-    std::istringstream arg3(argv[3]); // piles_num
+int read_cmd(int argc, char* argv[]){
+    char* p;
+    n_piles = strtol(argv[1], &p, 10);
+    if (*p != '\0') cout<<"Error";
 
-    out_file = argv[4];
+    n_cubes = strtol(argv[2], &p, 10);
+    if (*p != '\0') cout<<"Error";
 
-    if (!(arg1 >> n_piles)) {
-        std::cerr << "Invalid number: " << argv[1] << '\n';
-    } else if (!arg1.eof()) {
-        std::cerr << "Trailing characters after number: " << argv[1] << '\n';
-    }
+    start_pile = strtol(argv[3], &p, 10);
+    if (*p != '\0') cout<<"Error";
 
-    if (!(arg2 >> n_cubes)) {
-        std::cerr << "Invalid number: " << argv[2] << '\n';
-    } else if (!arg2.eof()) {
-        std::cerr << "Trailing characters after number: " << argv[2] << '\n';
-    }
+    end_pile = strtol(argv[4], &p, 10);
+    if (*p != '\0') cout<<"Error";
 
-    if (!(arg3 >> pile_num)) {
-        std::cerr << "Invalid number: " << argv[3] << '\n';
-    } else if (!arg3.eof()) {
-        std::cerr << "Trailing characters after number: " << argv[3] << '\n';
-    }
-
-    if (argc==6) {
-        in_file = argv[5];
-    }
 }
+
 int main(int argc,char *argv[]) {
+    vector<thread> pile_threads;
+
     read_cmd(argc, argv);
 
     if (sums[n_cubes-1]%n_piles!=0){
@@ -57,6 +47,70 @@ int main(int argc,char *argv[]) {
         return 1;
     }
 
+    vector<thread> threads;
+
+    for(int pile_num=0;pile_num<(2+end_pile-start_pile);pile_num++){
+        queues.emplace_back();
+    }
+
+    for (int pile_num=start_pile; pile_num<=end_pile; pile_num++) {
+        if (pile_num == 1) {
+            auto assigned = init_distribution();
+            queues[0].enqueue(assigned);
+            cout<<"Initial, writing to 0"<<endl;
+        }else if (pile_num==start_pile) {
+            auto filename = to_string(n_piles)+"_"+to_string(n_cubes)+"_"+to_string(pile_num-1);
+            cout<<"Reading from file "<< pile_num<<endl;
+            threads.emplace_back(read_pile, filename, pile_num, 0);
+        }
+
+        if (pile_num==n_piles) {
+            // We are going until the final pile, terminate as soon as we get an answer and log to stdout
+            auto filename = to_string(n_piles)+"_"+to_string(n_cubes)+"_"+to_string(pile_num)+".txt";
+            threads.emplace_back(write_pile, pile_num, pile_num, filename, true);
+            cout<<"Writing "<<pile_num<<" to stdio"<<endl;
+        }else if (pile_num==end_pile) {
+            auto filename = to_string(n_piles)+"_"+to_string(n_cubes)+"_"+to_string(pile_num);
+            cout<<"Writing "<<pile_num<<" to file"<<endl;
+            threads.emplace_back(write_pile, pile_num, pile_num, filename, false);
+
+        }
+//        cout<<pile_num-1<<" "<<pile_num<<" "<<pile_num<<" "<<queues[pile_num-1].size_approx()<<flush<<endl;
+        cout<<"reading from "<<pile_num-1<<" writing to "<<pile_num<<endl;
+
+        threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
+        threads.emplace_back( monitor);
+    }
+
+    for (auto & thread : threads) {
+        thread.join();
+    }
+
+}
+
+
+
+
+
+
+
+
+//        queues.emplace_back(); // Make a source queue
+//        auto source_queue = &queues[queues.size()-1];
+//
+//        if (pile_num==1){ // If this is pile 1 we need to enqueue from the initial distribution
+//            auto assigned = init_distribution();
+//            source_queue->enqueue(assigned);
+//        }if(pile_num==start_pile){ // If this is the first pile (but not pile 1) we enqueue from a file
+//            // start enqueueing from file
+//        }else{ // If this is some other pile we are using an internal queue
+//
+//        }
+//
+//
+
+
+/*
     if (argc==5){
         auto assigned = init_distribution();
         auto remaining = calc_remaining(assigned,1);
@@ -95,64 +149,63 @@ int main(int argc,char *argv[]) {
 
     }
 
+*/
 
 
+/*
 
- /*
-
-    std::istringstream arg1(argv[1]);
-    std::istringstream arg2(argv[2]);
+   std::istringstream arg1(argv[1]);
+   std::istringstream arg2(argv[2]);
 
 
-    vector<vector<int>> assigned_piles;
-    vector<int> assigned_remaining;
+   vector<vector<int>> assigned_piles;
+   vector<int> assigned_remaining;
 
-    assigned_piles = init_distribution();
-    auto start_pos = init_pos(assigned_piles);
+   assigned_piles = init_distribution();
+   auto start_pos = init_pos(assigned_piles);
 
-    assigned_remaining = init_remaining(assigned_piles);
+   assigned_remaining = init_remaining(assigned_piles);
 
-    if (sums[n_cubes-1]%n_piles!=0){
-        cout<<"The sum of the first "<<n_cubes<<" cubes is not divisible by "<<n_piles<<". Not Possible ☹️"<<endl;
-        return 1;
-    }
+   if (sums[n_cubes-1]%n_piles!=0){
+       cout<<"The sum of the first "<<n_cubes<<" cubes is not divisible by "<<n_piles<<". Not Possible ☹️"<<endl;
+       return 1;
+   }
 
-    vector<int> pile(n_cubes, false);
-    vector<int> disallowed(n_cubes, false);
-    vector<short> history;
-    vector<thread> pile_threads;
+   vector<int> pile(n_cubes, false);
+   vector<int> disallowed(n_cubes, false);
+   vector<short> history;
+   vector<thread> pile_threads;
 
-    for(int i=0;i<n_piles;i++){
-        queues.emplace_back();
-    }
+   for(int i=0;i<n_piles;i++){
+       queues.emplace_back();
+   }
 
-    auto start = chrono::high_resolution_clock::now();
+   auto start = chrono::high_resolution_clock::now();
 
-    pile_threads.emplace_back(start_source, assigned_remaining[0],  assigned_piles[0]);
+   pile_threads.emplace_back(start_source, assigned_remaining[0],  assigned_piles[0]);
 
-    for(int i=0; i<=n_piles-2;i++){
-        for(int n=0; n<5; n++){
-            pile_threads.emplace_back(start_thread,assigned_remaining[i+1], i, i+1, assigned_piles[i+1], start_pos);
-        }
-    }
+   for(int i=0; i<=n_piles-2;i++){
+       for(int n=0; n<5; n++){
+           pile_threads.emplace_back(start_thread,assigned_remaining[i+1], i, i+1, assigned_piles[i+1], start_pos);
+       }
+   }
 
 //    auto m = thread(monitor);
 
-    for(auto & pile_thread : pile_threads){
-        pile_thread.join();
-    }
+   for(auto & pile_thread : pile_threads){
+       pile_thread.join();
+   }
 //    m.join();
 
-    auto stop = chrono::high_resolution_clock::now();
-    auto duration = duration_cast<chrono::milliseconds>(stop-start);
+   auto stop = chrono::high_resolution_clock::now();
+   auto duration = duration_cast<chrono::milliseconds>(stop-start);
 
-    cout<<endl<<"Completed in "<<duration.count()<<" milliseconds"<<endl;
+   cout<<endl<<"Completed in "<<duration.count()<<" milliseconds"<<endl;
 
-    vector<int> piles;
+   vector<int> piles;
 
-    if (queues[n_piles-1].try_dequeue(piles)){
-        print_piles(piles);
-    }else{
-        cout<<"No piles found"<<endl;
-    }*/
-}
+   if (queues[n_piles-1].try_dequeue(piles)){
+       print_piles(piles);
+   }else{
+       cout<<"No piles found"<<endl;
+   }*/
