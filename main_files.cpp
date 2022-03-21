@@ -79,6 +79,8 @@ int main(int argc,char *argv[]) {
 
         threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
         threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
+        threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
+
         threads.emplace_back( monitor);
     }
 

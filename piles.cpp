@@ -151,7 +151,7 @@ void solve(int source_queue_idx, int dest_queue_idx, int pile_num){
     vector<int_fast8_t> pile;
 
     while(true){
-        auto ret = queues[source_queue_idx].wait_dequeue_timed(pile, std::chrono::milliseconds(1));
+        auto ret = queues[source_queue_idx].wait_dequeue_timed(pile, std::chrono::milliseconds(100));
         if (is_done()) return;
 
         if (!ret) continue;
@@ -170,6 +170,7 @@ void monitor(){
         for(int i=0;i<queues.size();i++) {
             cout<<i<<" "<<queues[i].size_approx()<<endl;
         }
+        cout<<masks.size()<<endl;
         if (is_done()) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

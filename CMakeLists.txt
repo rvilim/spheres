@@ -5,8 +5,6 @@ set(Boost_USE_STATIC_LIBS   ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-
-#find_package(Boost REQUIRED)
 find_package(Boost 1.78.0 REQUIRED)
 
 #include_directories(${Boost_INCLUDE_DIRS})
