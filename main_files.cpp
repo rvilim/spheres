@@ -6,7 +6,6 @@
 #include <thread>
 #include <sstream>
 #include <string>
-#include <boost/dynamic_bitset.hpp>
 #include <stdlib.h>
 
 using namespace std;
@@ -78,6 +77,7 @@ int main(int argc,char *argv[]) {
 //        cout<<pile_num-1<<" "<<pile_num<<" "<<pile_num<<" "<<queues[pile_num-1].size_approx()<<flush<<endl;
         cout<<"reading from "<<pile_num-1<<" writing to "<<pile_num<<endl;
 
+        threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
         threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
         threads.emplace_back( monitor);
     }

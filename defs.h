@@ -3,6 +3,8 @@
 //
 #include <vector>
 #include "blockingconcurrentqueue.h"
+#include <set>
+#include <boost/dynamic_bitset.hpp>
 
 #ifndef PILES_DEFS_H
 #define PILES_DEFS_H
@@ -16,5 +18,8 @@ extern int n_cubes;
 
 extern vector<BlockingConcurrentQueue<vector<int_fast8_t>>> queues;
 extern bool stop;
+
+extern std::mutex g_mask_mutex;
+extern std::set<boost::dynamic_bitset<>> masks;
 
 #endif //PILES_DEFS_H

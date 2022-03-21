@@ -20,6 +20,9 @@ unsigned int n_solutions=0;
 unsigned int read_progress=0;
 unsigned int n_records=0;
 
+std::mutex g_mask_mutex;
+std::set<boost::dynamic_bitset<>> masks;
+
 int calc_remaining(vector<int_fast8_t> piles, int pile){
     int remaining=sums[n_cubes-1];
 
@@ -76,11 +79,25 @@ vector<int_fast8_t> init_distribution(){
 
 
 void success(int pos, int pile_num, vector<int_fast8_t> &pile, BlockingConcurrentQueue<vector<int_fast8_t>> &dest_queue){
-    pile[pos] = pile_num;
+    boost::dynamic_bitset<> mask(n_cubes);
 
-    dest_queue.enqueue(pile);
+    for(int i=0;i<pile.size();i++){
+        if (pile[i]!=0){
+            mask[i]=true;
+        }
+    }
 
-    pile[pos] = 0;
+    if (masks.find(mask)==masks.end()){
+        {
+            std::lock_guard<std::mutex> guard(g_mask_mutex);
+            masks.insert(mask);
+        }
+
+        pile[pos] = pile_num;
+        dest_queue.enqueue(pile);
+        pile[pos] = 0;
+    }
+
 }
 
 
@@ -134,7 +151,7 @@ void solve(int source_queue_idx, int dest_queue_idx, int pile_num){
     vector<int_fast8_t> pile;
 
     while(true){
-        auto ret = queues[source_queue_idx].wait_dequeue_timed(pile, std::chrono::milliseconds(1000));
+        auto ret = queues[source_queue_idx].wait_dequeue_timed(pile, std::chrono::milliseconds(1));
         if (is_done()) return;
 
         if (!ret) continue;
@@ -154,7 +171,7 @@ void monitor(){
             cout<<i<<" "<<queues[i].size_approx()<<endl;
         }
         if (is_done()) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 //void monitor(){
