@@ -6,7 +6,7 @@
 #include <thread>
 #include <sstream>
 #include <string>
-#include <stdlib.h>
+#include <cstdlib>
 
 using namespace std;
 //namespace po = boost::program_options;
@@ -17,6 +17,7 @@ int n_cubes=-1;
 int n_piles=-1;
 int start_pile=-1;
 int end_pile=-1;
+vector<vector<dynamic_bitset<>>> filters;
 
 int read_cmd(int argc, char* argv[]);
 
@@ -46,6 +47,7 @@ int main(int argc,char *argv[]) {
         return 1;
     }
 
+    filters = read_filters("/Users/rvilim/repos/piles/cubes_8", n_cubes);
     vector<thread> threads;
 
     for(int pile_num=0;pile_num<(2+end_pile-start_pile);pile_num++){
@@ -56,10 +58,8 @@ int main(int argc,char *argv[]) {
         if (pile_num == 1) {
             auto assigned = init_distribution();
             queues[0].enqueue(assigned);
-            cout<<"Initial, writing to 0"<<endl;
         }else if (pile_num==start_pile) {
             auto filename = to_string(n_piles)+"_"+to_string(n_cubes)+"_"+to_string(pile_num-1);
-            cout<<"Reading from file "<< pile_num<<endl;
             threads.emplace_back(read_pile, filename, pile_num, 0);
         }
 
@@ -67,15 +67,11 @@ int main(int argc,char *argv[]) {
             // We are going until the final pile, terminate as soon as we get an answer and log to stdout
             auto filename = to_string(n_piles)+"_"+to_string(n_cubes)+"_"+to_string(pile_num)+".txt";
             threads.emplace_back(write_pile, pile_num, pile_num, filename, true);
-            cout<<"Writing "<<pile_num<<" to stdio"<<endl;
         }else if (pile_num==end_pile) {
             auto filename = to_string(n_piles)+"_"+to_string(n_cubes)+"_"+to_string(pile_num);
-            cout<<"Writing "<<pile_num<<" to file"<<endl;
             threads.emplace_back(write_pile, pile_num, pile_num, filename, false);
 
         }
-//        cout<<pile_num-1<<" "<<pile_num<<" "<<pile_num<<" "<<queues[pile_num-1].size_approx()<<flush<<endl;
-        cout<<"reading from "<<pile_num-1<<" writing to "<<pile_num<<endl;
 
         threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
         threads.emplace_back(solve, pile_num-1, pile_num, pile_num);

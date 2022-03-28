@@ -16,8 +16,17 @@ if(Boost_FOUND)
 
 #    add_executable(piles main.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h)
 #    add_executable(bench bench.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h)
-    add_executable(piles_files main_files.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h)
-    add_executable(bench bench.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h)
+    add_executable(piles_files main_files.cpp defs.h
+            piles.cpp piles.h
+            blockingconcurrentqueue.h
+            lightweightsemaphore.h
+            concurrentqueue.h
+            bloomfilter.cpp bloomfilter.h
+            MurmurHash3.cpp MurmurHash3.h)
+    add_executable(bench bench.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h bloomrunner.cpp )
+    add_executable(bloom bloomrunner.cpp BloomFilter.cpp BloomFilter.h MurmurHash3.cpp MurmurHash3.h)
+    add_executable(cube_masks cube_masks.cpp blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h  )
+    add_executable(filter filter.cpp )
 
     #    target_include_directories( piles_files PRIVATE ${Boost_INCLUDE_DIR})
 #    add_executable(tests defs.h piles.cpp piles.h test_piles.cpp)

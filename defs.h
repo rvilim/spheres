@@ -10,6 +10,7 @@
 #define PILES_DEFS_H
 using namespace moodycamel;
 using namespace std;
+using namespace boost;
 
 extern const int sums[];
 extern const int cubes[];
@@ -17,9 +18,8 @@ extern int n_piles;
 extern int n_cubes;
 
 extern vector<BlockingConcurrentQueue<vector<int_fast8_t>>> queues;
-extern bool stop;
+extern atomic<bool> stop;
 
-extern std::mutex g_mask_mutex;
 extern std::set<boost::dynamic_bitset<>> masks;
-
+extern vector<vector<dynamic_bitset<>>> filters;
 #endif //PILES_DEFS_H
