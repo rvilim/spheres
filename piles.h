@@ -20,7 +20,9 @@ void make_pile(int target, int remaining, int pos, int pile_num, vector<int_fast
 int calc_remaining(vector<int_fast8_t> piles, int pile);
 
 int sum_pile(vector<int_fast8_t> pile, int pile_num);
-vector<vector<dynamic_bitset<>>> read_filters(string filename, int n_cubes);
+//vector<vector<dynamic_bitset<>>> read_filters(string filename, int n_cubes);
+vector<vector<vector<int_fast8_t>>> read_filters(string filename, int n_cubes);
+//bool filter_diophantine(vector<int_fast8_t> &pile, int pile_num);
 
 void start_source(int target, vector<int_fast8_t>assigned_pile);
 void start_thread(int target, int source_queue, int dest_queue, vector<int_fast8_t>assigned_pile, int start_pos);

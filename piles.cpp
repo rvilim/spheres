@@ -10,6 +10,7 @@
 #include <sstream>
 #include "BloomFilter.h"
 #include <boost/dynamic_bitset.hpp>
+#include "diophantine.h"
 
 using namespace boost;
 using namespace std;
@@ -27,18 +28,10 @@ mutex mask_lock;
 std::set<boost::dynamic_bitset<>> masks;
 BloomFilter masks_bloom(3310561880, 10);
 
-std::vector<std::string> split(const std::string& str, char delim) {
-    std::vector<std::string> strings;
-    size_t start;
-    size_t end = 0;
-    while ((start = str.find_first_not_of(delim, end)) != std::string::npos) {
-        end = str.find(delim, start);
-        strings.push_back(str.substr(start, end - start));
-    }
-    return strings;
-}
+auto diophantine_filter = Filter("/Users/rvilim/repos/piles/cubes_6", 90);
 
-vector<vector<dynamic_bitset<>>> read_filters(string filename, int n_cubes){
+
+/*vector<vector<dynamic_bitset<>>> read_filters(string filename, int n_cubes){
     vector<vector<dynamic_bitset<>>> filters(100);
     std::ifstream infile(filename);
     string line;
@@ -65,7 +58,7 @@ vector<vector<dynamic_bitset<>>> read_filters(string filename, int n_cubes){
     infile.close();
 
     return filters;
-}
+}*/
 
 
 int calc_remaining(vector<int_fast8_t> piles, int pile){
@@ -121,6 +114,38 @@ vector<int_fast8_t> init_distribution(){
     return piles;
 }
 
+bool filter_diophantine(vector<int_fast8_t> &pile, int pile_num){
+    vector<bool> pile_mask(pile.size(), 0);
+    for (int i=0;i<pile.size(); i++) {
+        pile_mask[i] = (unsigned(pile[i]) == pile_num);
+    }
+
+    return diophantine_filter.filter(pile_mask);
+}
+
+
+
+
+/*bool filter_diophantine_old(vector<int_fast8_t> &pile, int pile_num) {
+    dynamic_bitset<> pile_bitset(n_cubes);
+
+    for (int i = 0; i < pile.size(); i++) {
+        pile_bitset[i] = pile[i]==pile_num;
+    }
+
+    // We start this loop at 5 because there are no entries < 6 in the filters rhs table
+    for (int i = 5; i < pile.size(); i++) {
+        if (!pile_bitset[i]) {
+            auto current_cube = i + 1;
+            for (auto &filter: filters[current_cube]) {
+                if ((filter & pile_bitset) == filter) return true;
+            }
+        }
+    }
+    return false;
+}
+*/
+
 bool filter_bloom(vector<int_fast8_t> &pile){
     vector<uint_fast8_t> mask(n_cubes, 0);
 
@@ -149,11 +174,39 @@ bool filter_bloom(vector<int_fast8_t> &pile){
     }
 }
 void success(int pos, int pile_num, vector<int_fast8_t> &pile, BlockingConcurrentQueue<vector<int_fast8_t>> &dest_queue){
-    if ((!filter_bloom(pile))){
-        pile[pos] = pile_num;
-        dest_queue.enqueue(pile);
-        pile[pos] = 0;
-    }
+//    if ((!filter_bloom(pile)) && (!filter_diophantine(pile, pile_num))){
+/*
+    if (pile_num==1){
+
+
+        auto a = filter_diophantine(pile, pile_num);
+        auto b = filter_diophantine_old(pile, pile_num);
+        if (a!=b){
+            cout<<"start"<<endl;
+            for(int i=0;i<pile.size();i++){
+                cout<<unsigned (pile[i]);
+            }
+            cout<<endl;
+
+            for(int i=0;i<pile.size();i++){
+                cout<<unsigned (pile[i]);
+            }
+            cout<<endl;
+            cout<<a<<" "<<b<<" "<<endl;
+            cout<<"end"<<endl;
+        }
+
+    }*/
+
+//    if (!filter_diophantine(pile, pile_num) ){
+//        pile[pos] = pile_num;
+//        dest_queue.enqueue(pile);
+//        pile[pos] = 0;
+//    }
+
+    pile[pos] = pile_num;
+    dest_queue.enqueue(pile);
+    pile[pos] = 0;
 }
 
 
@@ -228,7 +281,7 @@ void monitor(){
         }
         cout<<masks.size()<<endl;
         if (is_done()) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
 

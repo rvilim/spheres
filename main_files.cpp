@@ -17,7 +17,8 @@ int n_cubes=-1;
 int n_piles=-1;
 int start_pile=-1;
 int end_pile=-1;
-vector<vector<dynamic_bitset<>>> filters;
+//vector<vector<boost::dynamic_bitset<>>> filters;
+vector<vector<vector<int_fast8_t>>> filters;
 
 int read_cmd(int argc, char* argv[]);
 
@@ -48,7 +49,13 @@ int main(int argc,char *argv[]) {
     }
 
     filters = read_filters("/Users/rvilim/repos/piles/cubes_8", n_cubes);
+
+//    vector<int_fast8_t> pile = {1, 1, 0, 0, 0, 1, 0, 1, 0};
+//    cout<<filter_diophantine(pile, 1)<<endl;
+//    return 0;
+
     vector<thread> threads;
+    std::thread monitor_thread(monitor);
 
     for(int pile_num=0;pile_num<(2+end_pile-start_pile);pile_num++){
         queues.emplace_back();
@@ -73,8 +80,7 @@ int main(int argc,char *argv[]) {
 
         }
 
-        threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
-        threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
+//        threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
         threads.emplace_back(solve, pile_num-1, pile_num, pile_num);
 
         threads.emplace_back( monitor);
@@ -83,6 +89,8 @@ int main(int argc,char *argv[]) {
     for (auto & thread : threads) {
         thread.join();
     }
+    monitor_thread.join();
+
 
 }
 

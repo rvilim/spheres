@@ -21,5 +21,6 @@ extern vector<BlockingConcurrentQueue<vector<int_fast8_t>>> queues;
 extern atomic<bool> stop;
 
 extern std::set<boost::dynamic_bitset<>> masks;
-extern vector<vector<dynamic_bitset<>>> filters;
+//extern vector<vector<boost::dynamic_bitset<>>> filters;
+extern vector<vector<vector<int_fast8_t>>> filters;
 #endif //PILES_DEFS_H
