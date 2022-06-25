@@ -61,12 +61,12 @@ int main(int argc,char *argv[]) {
         }
     }
 
-//    auto m = thread(monitor);
+    auto m = thread(monitor);
 
     for(auto & pile_thread : pile_threads){
         pile_thread.join();
     }
-//    m.join();
+    m.join();
 
     auto stop = chrono::high_resolution_clock::now();
     auto duration = duration_cast<chrono::milliseconds>(stop-start);

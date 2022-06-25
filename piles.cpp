@@ -86,7 +86,7 @@ void make_pile(int target, int remaining, int pos,
 
     if ((pos==0) || is_done()) return;
 //    auto next_pos = next_allowed(pos, remaining, disallowed);
-//    if (next_pos==-1) return
+//    if (next_poes==-1) return
 
     // Call the function again with the bit in question both set and unset
     if (target-cubes[pos]>0) {
@@ -169,18 +169,27 @@ int calc_remaining(vector<int> disallowed){
 }
 
 void start_thread(int target, int source_queue, int dest_queue, vector<int>assigned_pile, int start_pos){
+    const size_t N_DEQUEUE=100;
+    vector<int> disallowed[N_DEQUEUE];
+
     while(true){
         if (is_done()) return;
+        for (auto i = queues[source_queue].try_dequeue_bulk(disallowed, N_DEQUEUE); i != 0; --i) {
+                auto remaining = calc_remaining(disallowed[i-1]);
+                make_pile(target, remaining, start_pos, assigned_pile, disallowed[i-1],  dest_queue);
 
-        vector<int> disallowed;
-        auto ret = queues[source_queue].wait_dequeue_timed(disallowed, std::chrono::milliseconds(1000));
+//                ++disallowed[items[disallowed - 1]];
+            }
+//        auto ret = queues[source_queue].wait_dequeue_timed(disallowed, std::chrono::milliseconds(1000));
 
-        if ((!ret) && (is_done())) return;
-
-        if (ret){
-            auto remaining = calc_remaining(disallowed);
-            make_pile(target, remaining, start_pos, assigned_pile, disallowed,  dest_queue);
-        }
+//        auto ret = queues[source_queue].try_dequeue(disallowed);
+//        if ((!ret) && (is_done())) return;
+//
+//        if (ret){
+//            auto remaining = calc_remaining(disallowed);
+//            make_pile(target, remaining, start_pos, assigned_pile, disallowed,  dest_queue);
+//
+//        }
 
     }
 }
