@@ -174,12 +174,17 @@ void start_thread(int target, int source_queue, int dest_queue, vector<int>assig
 
     while(true){
         if (is_done()) return;
-        for (auto i = queues[source_queue].try_dequeue_bulk(disallowed, N_DEQUEUE); i != 0; --i) {
+        auto n = queues[source_queue].try_dequeue_bulk(disallowed, N_DEQUEUE);
+
+        if (n==0){
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+        for (auto i = n; i != 0; --i) {
                 auto remaining = calc_remaining(disallowed[i-1]);
                 make_pile(target, remaining, start_pos, assigned_pile, disallowed[i-1],  dest_queue);
 
 //                ++disallowed[items[disallowed - 1]];
-            }
+        }
 //        auto ret = queues[source_queue].wait_dequeue_timed(disallowed, std::chrono::milliseconds(1000));
 
 //        auto ret = queues[source_queue].try_dequeue(disallowed);
