@@ -54,9 +54,9 @@ void success(int pos, int queue_index, vector<int> &pile, vector<int> &disallowe
         }
     }
 
-//    if (queues[queue_index].size_approx()>1000000){
-//        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-//    }
+    while (queues[queue_index].size_approx()>1000000){
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
     queues[queue_index].enqueue(result);
 
     if(queue_index==n_piles-1){
@@ -177,25 +177,12 @@ void start_thread(int target, int source_queue, int dest_queue, vector<int>assig
         auto n = queues[source_queue].try_dequeue_bulk(disallowed, N_DEQUEUE);
 
         if (n==0){
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
         for (auto i = n; i != 0; --i) {
                 auto remaining = calc_remaining(disallowed[i-1]);
                 make_pile(target, remaining, start_pos, assigned_pile, disallowed[i-1],  dest_queue);
-
-//                ++disallowed[items[disallowed - 1]];
         }
-//        auto ret = queues[source_queue].wait_dequeue_timed(disallowed, std::chrono::milliseconds(1000));
-
-//        auto ret = queues[source_queue].try_dequeue(disallowed);
-//        if ((!ret) && (is_done())) return;
-//
-//        if (ret){
-//            auto remaining = calc_remaining(disallowed);
-//            make_pile(target, remaining, start_pos, assigned_pile, disallowed,  dest_queue);
-//
-//        }
-
     }
 }
 
@@ -209,7 +196,7 @@ void monitor(){
         for(int i=0; i<queues.size();i++){
             std::cout<<i<<" "<<queues[i].size_approx()<<endl;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         if (is_done()){
             return;
         }

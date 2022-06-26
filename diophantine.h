@@ -8,41 +8,35 @@
 #include <utility>
 #include <vector>
 #include <boost/dynamic_bitset.hpp>
+#include <unordered_map>
 
 using namespace std;
 using namespace boost;
 
-struct filter_node {
-    bool end = false;
-    filter_node* left = nullptr;
-    filter_node* right = nullptr;
-};
-
-struct filter_tree {
-    vector<filter_node> targets;
+struct FilterNode {
+    struct FilterNode *children[100];
+    bool end;
 };
 
 class Filter {
 public:
     Filter(string filename, int n_cubes) : filename(std::move(filename)), n_cubes(n_cubes) {
         for(int i=1;i<=n_cubes;i++){
-            filter_root.targets.push_back({false, nullptr, nullptr});
+            filter_roots.push_back({});
         }
         read_filters();
     }
-
-    bool filter(vector<bool> pile_mask);
-    bool filter_single(vector<bool> pile_mask, int target);
+    bool search(int rhs,  vector<uint8_t> key);
 
 private:
     string filename;
     int n_cubes;
 
-    filter_tree filter_root;
+    vector<FilterNode> filter_roots;
 
-    void add(dynamic_bitset<> lhs, int rhs);
+    void add(struct FilterNode *root, vector<uint8_t> key);
     static std::vector<std::string> split(const std::string& str, char delim);
-    bool m(vector<bool> &pile_mask, filter_node &cur_node, int cur_pos);
+//    bool m(vector<bool> &pile_mask, filter_node &cur_node, int cur_pos);
 
 
     void read_filters();
