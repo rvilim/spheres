@@ -6,12 +6,16 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 
 find_package(Boost 1.78.0 REQUIRED)
+find_library(JEMALLOC_LIBRARY NAMES jemalloc)
 
+if(NOT JEMALLOC_LIBRARY)
+    message(FATAL_ERROR "jemalloc not found")
+endif()
 
 if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
 
-    add_executable(piles main.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h)
+    add_executable(piles main.cpp diophantine.cpp diophantine.h defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h )
     add_executable(bench bench.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h)
 
     add_executable(diophantine diophantine.cpp diophantine.h defs.h)
@@ -23,3 +27,5 @@ if(Boost_FOUND)
     target_link_libraries (test_diophantine ${Boost_LIBRARIES})
 
 endif()
+
+#target_link_libraries(piles PRIVATE ${JEMALLOC_LIBRARY})

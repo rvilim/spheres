@@ -3,7 +3,6 @@
 #include <vector>
 #include <fstream>
 #include "diophantine.h"
-#include <boost/dynamic_bitset.hpp>
 #include "defs.h"
 
 using namespace std;
