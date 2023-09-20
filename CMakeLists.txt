@@ -15,16 +15,16 @@ endif()
 if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
 
-    add_executable(piles main.cpp diophantine.cpp diophantine.h defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h )
-    add_executable(bench bench.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h)
+    add_executable(piles main.cpp diophantine.h diophantine.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h )
+#    add_executable(bench bench.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h)
 
     add_executable(diophantine diophantine.cpp diophantine.h defs.h)
-    add_executable(test_diophantine test_diophantine.cpp diophantine.cpp diophantine.h defs.h)
+#    add_executable(test_diophantine test_diophantine.cpp diophantine.cpp diophantine.h defs.h)
 
 #    add_executable(tests defs.h piles.cpp piles.h test_piles.cpp)
 
-    target_link_libraries (diophantine ${Boost_LIBRARIES})
-    target_link_libraries (test_diophantine ${Boost_LIBRARIES})
+#    target_link_libraries (diophantine ${Boost_LIBRARIES})
+#    target_link_libraries (test_diophantine ${Boost_LIBRARIES})
 
 endif()
 

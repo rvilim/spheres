@@ -3,7 +3,6 @@
 //
 #include <vector>
 #include "blockingconcurrentqueue.h"
-#include "diophantine.h"
 
 #ifndef PILES_DEFS_H
 #define PILES_DEFS_H

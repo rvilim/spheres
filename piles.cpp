@@ -17,11 +17,21 @@ void Pile::success(int pos, vector<int> &pile, vector<int> &disallowed){
 
     vector<int> result(disallowed);
 
+    for (int i=0;i<disallowed.size(); i++){
+        cout<<disallowed[i]<<" ";
+    }
+    cout<<endl;
+
+//    if (diophantine_filter->find(pile)) {
+//        return;
+//    }
     for(int i=0;i<pile.size(); i++){
         if (pile[i]!=0){
             result[i]=pile_number+1;
         }
+        cout<<result[i];
     }
+    cout<<endl;
 
 
 //    if(pile_number==0){
@@ -108,11 +118,15 @@ void Pile::make_pile_iter(int target, int remaining, int pos,
 void Pile::make_pile(int target, int remaining, int pos,
                vector<int> &pile, vector<int> &disallowed){
 
-    if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
+    while(disallowed[pos]){
+        pos-=1;
         if (pos==0) return;
-        make_pile(target, remaining, pos - 1, pile, disallowed);
-        return;
     }
+//    if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
+//        if (pos==0) return;
+//        make_pile(target, remaining, pos - 1, pile, disallowed);
+//        return;
+//    }
 
     if (target>remaining) {
         return;
@@ -134,14 +148,6 @@ void Pile::make_pile(int target, int remaining, int pos,
     make_pile(target, remaining-cubes[pos], pos-1, pile, disallowed);
 
 }
-//
-//int next_allowed(int pos, int &remaining, vector<int> &disallowed){
-//    for(int i=pos-1;i>=0;i--){
-//        remaining-=cubes[i+1];
-//        if (!disallowed[i]) return i;
-//    }
-//    return -1;
-//}
 
 vector<vector<int>> init_distribution(int n_cubes, int n_piles){
     int target = sums[n_cubes-1]/n_piles;
@@ -213,16 +219,16 @@ void start_thread(Pile *pile, int target, int n_cubes, vector<int>assigned_pile,
 
     while(true){
         if (pile->is_done()) return;
-        auto n = pile->source_queue->try_dequeue_bulk(disallowed, N_DEQUEUE);
-
+//        auto n = pile->source_queue->try_dequeue_bulk(disallowed, N_DEQUEUE);
+        int n=0;
         if (n==0){
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            if (pile->is_done()) return;
-        }
-        for (auto i = n; i != 0; --i) {
+        }else{
+            (*pile->queue_stats).n_deqeueued+=n;
+            for (auto i = n; i != 0; --i) {
                 auto remaining = calc_remaining(disallowed[i-1], n_cubes);
-//                pile->make_pile_iter(target, remaining, start_pos, assigned_pile, disallowed[i-1]);
                 pile->make_pile(target, remaining, start_pos, assigned_pile, disallowed[i-1]);
+            }
         }
     }
 }
@@ -232,13 +238,13 @@ bool Pile::is_done(){
 
 }
 
-void monitor(vector<BlockingConcurrentQueue<vector<int>>> *queues, atomic_bool *global_stop){
+void monitor(vector<BlockingConcurrentQueue<vector<int>>> *queues, atomic_bool *global_stop, vector<QueueStats> *queue_stats){
     while (true){
         system("clear");
         for(int i=0; i<queues->size();i++){
-            std::cout<<i<<" "<<(*queues)[i].size_approx()<<endl;
+            std::cout<<i<<" "<<(*queues)[i].size_approx()<<" n_dequeued: "<< (*queue_stats)[i].n_deqeueued<<endl;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         if (*global_stop){
             return;
         }

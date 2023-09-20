@@ -8,51 +8,6 @@
 using namespace std;
 using namespace boost;
 
-struct FilterNode *getNode(void) {
-    auto *pNode = new FilterNode;
-    pNode->end=false;
-
-    for(auto & i : pNode->children){
-        i= nullptr;
-    }
-    return pNode;
-}
-
-void Filter::add(struct FilterNode *root, vector<uint8_t> key){
-    struct FilterNode *pCrawl = root;
-
-    for(auto & index: key){
-        if (!pCrawl->children[index]) {
-            pCrawl->children[index]=getNode();
-        }
-
-        pCrawl = pCrawl->children[index];
-    }
-    pCrawl->end = true;
-}
-
-bool s(vector<uint8_t> &key, int idx, FilterNode *node){
-
-    if (node->end){
-        return true;
-    }
-    if (idx==key.size()) {
-        return false;
-    }
-
-    bool ret = s(key, idx + 1, node);
-
-    if (node->children[key[idx]]) {
-        ret |= s(key, idx + 1, node->children[key[idx]]);
-    }
-
-    return ret;
-}
-
-bool Filter::search(int rhs,  vector<uint8_t> key){
-    return s(key, 0, &filter_roots[rhs]);
-}
-
 void Filter::read_filters(){
     std::ifstream infile(filename);
     string line;
@@ -62,26 +17,49 @@ void Filter::read_filters(){
         vector<uint8_t> lhs;
 
         {
+
             auto pair = split(string(line), '|');
-            auto lhs_s = split(pair[0], ',');
+            auto a = pair[0];
+            auto lhs_s = split(string(a), ',');
 
             rhs = stoi(pair[1]);
 
 
             if (rhs>n_cubes) continue;
-
+            vector<int> new_filter;
+            new_filter.reserve(lhs_s.size());
             for(auto & i : lhs_s) {
-                lhs.push_back(stoi(i));
+                new_filter.push_back(stoi(i)-1);
             }
 
-            add(&filter_roots[rhs], lhs);
+            filters[rhs-1].emplace_back(new_filter);
         }
-
     }
     infile.close();
 
 }
 
+bool Filter::find(const vector<int>& pile) {
+    for(int i=0;i<pile.size();i++){
+        if (pile[i]==false) {
+            auto v = filters.find(i);
+            if (v!=filters.end()) {
+                for (const std::vector<int>& filter : v->second) {
+
+                    bool reject=true;
+                    for (int val: filter){
+                        reject &= (pile[val]);
+                    }
+
+                    if (reject) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
 
 std::vector<std::string> Filter::split(const std::string& str, char delim) {
     std::vector<std::string> strings;
@@ -94,15 +72,21 @@ std::vector<std::string> Filter::split(const std::string& str, char delim) {
     return strings;
 }
 //
-//int main(){
-//    auto f = Filter("/Users/rvilim/repos/piles/cubes_8",100);
+//int main() {
+////    1,6,8|9
+//    auto f = Filter("/Users/rvilim/repos/piles/cubes_8", 63);
+////    vector<int> a = {1, 0, 0, 0, 0, 1, 0, 1, 0};
+////    cout << f.find(a) << endl;
 //
-//    cout<<"Should be true "<<f.search(9,{1,6,7,8})<<endl;
-//    cout<<"Should be false "<<f.search(9,{1,7,8})<<endl;
-//    cout<<"Should be true "<<f.search(25,{1,4,15,17,18,22})<<endl;
-//    cout<<"Should be true "<<f.search(25,{4,15,17,18,22})<<endl;
-//    cout<<"Should be false "<<f.search(25,{15,17,18,22,38})<<endl;
-//    cout<<"Should be true "<<f.search(25,{4,15,17,18,22,38})<<endl;
-//
-//
+//    std::ifstream infile("/Users/rvilim/repos/piles/o");
+//    string line;
+//    while (getline(infile, line)) {
+//        vector<int> l;
+//        for (auto &ch: line) {
+//            l.emplace_back(ch - '0');
+//        }
+//        if (!f.find(l)){
+//            cout<<line<<endl;
+//        }
+//    }
 //}

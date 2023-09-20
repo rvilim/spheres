@@ -7,6 +7,7 @@
 
 #include <utility>
 #include <vector>
+#include <map>
 #include <boost/dynamic_bitset.hpp>
 #include <unordered_map>
 
@@ -21,22 +22,16 @@ struct FilterNode {
 class Filter {
 public:
     Filter(string filename, int n_cubes) : filename(std::move(filename)), n_cubes(n_cubes) {
-        for(int i=1;i<=n_cubes;i++){
-            filter_roots.push_back({});
-        }
         read_filters();
     }
-    bool search(int rhs,  vector<uint8_t> key);
-
+//    bool search(int rhs,  vector<uint8_t> key);
+    bool find(const vector<int>& pile);
 private:
     string filename;
     int n_cubes;
 
-    vector<FilterNode> filter_roots;
-
-    void add(struct FilterNode *root, vector<uint8_t> key);
+    unordered_map<int, vector<vector<int>>> filters;
     static std::vector<std::string> split(const std::string& str, char delim);
-//    bool m(vector<bool> &pile_mask, filter_node &cur_node, int cur_pos);
 
 
     void read_filters();

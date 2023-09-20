@@ -5,6 +5,7 @@
 #include <chrono>
 #include <thread>
 #include <sstream>
+#include "diophantine.h"
 
 using namespace std;
 
@@ -52,11 +53,16 @@ Params parse_input(char *argv[]){
 }
 int main(int argc, char *argv[]) {
 
+
     auto input_params = parse_input(argv);
 
     int n_cubes = input_params.n_cubes;
     int n_piles = input_params.n_piles;
     int n_threads = input_params.n_threads;
+
+    auto filter = Filter("/Users/rvilim/repos/piles/cubes_8", n_cubes);
+
+    std::vector<QueueStats> queue_stats(n_piles, {0, 0}); // Create a vector of 10 QueueStats objects, all initialized to zero
 
     vector<vector<int>> assigned_piles;
     vector<int> assigned_remaining;
@@ -76,10 +82,10 @@ int main(int argc, char *argv[]) {
     atomic_bool stop = false;
     vector<BlockingConcurrentQueue<vector<int>>> queues(n_piles);
 
-    piles.emplace_back(n_piles, n_cubes, queues[0], queues[0],  0, &stop);
+    piles.emplace_back(n_piles, n_cubes, queues[0], queues[0],  0, &stop, queue_stats[0]);
 
     for(int i=1;i<n_piles;i++){
-        piles.emplace_back(n_piles, n_cubes, queues[i-1], queues[i], i, &stop);
+        piles.emplace_back(n_piles, n_cubes, queues[i-1], queues[i], i, &stop, queue_stats[i]);
     }
 
     auto start_time = chrono::high_resolution_clock::now();
@@ -92,12 +98,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    auto m = thread(monitor, &queues, &stop);
+//    auto m = thread(monitor, &queues, &stop, &queue_stats);
 
     for(auto & pile_thread : pile_threads){
         pile_thread.join();
     }
-    m.join();
+//    m.join();
 
     auto stop_time = chrono::high_resolution_clock::now();
     auto duration = duration_cast<chrono::milliseconds>(stop_time-start_time);
