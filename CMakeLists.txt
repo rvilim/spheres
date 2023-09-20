@@ -16,6 +16,7 @@ if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
 
     add_executable(piles main.cpp diophantine.h diophantine.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h )
+    add_executable(bittest bittest.cpp )
 #    add_executable(bench bench.cpp defs.h piles.cpp piles.h blockingconcurrentqueue.h lightweightsemaphore.h concurrentqueue.h)
 
     add_executable(diophantine diophantine.cpp diophantine.h defs.h)
@@ -28,4 +29,4 @@ if(Boost_FOUND)
 
 endif()
 
-#target_link_libraries(piles PRIVATE ${JEMALLOC_LIBRARY})
+#target_link_libraries(piles PRIVATE ${JEMALLOC_LIBRARY})add_executable(bittest bittest.cpp)

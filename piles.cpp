@@ -17,38 +17,11 @@ void Pile::success(int pos, vector<int> &pile, vector<int> &disallowed){
 
     vector<int> result(disallowed);
 
-    for (int i=0;i<disallowed.size(); i++){
-        cout<<disallowed[i]<<" ";
-    }
-    cout<<endl;
-
-//    if (diophantine_filter->find(pile)) {
-//        return;
-//    }
     for(int i=0;i<pile.size(); i++){
         if (pile[i]!=0){
             result[i]=pile_number+1;
         }
-        cout<<result[i];
     }
-    cout<<endl;
-
-
-//    if(pile_number==0){
-//        if ((result[8]==0) && (result[0]==1) && (result[5]==1) && (result[7]==1)){
-//            for (auto & i : result){
-//                cout<<i;
-//            }
-//            cout<<endl;
-//        }
-//
-//        if ((result[8]==1) && (result[0]==0) && (result[5]==0) && (result[7]==0)){
-//            for (auto & i : result){
-//                cout<<i;
-//            }
-//            cout<<endl;
-//        }
-//    }
 
     while (dest_queue->size_approx()>10000000){ // Don't let too many stack up on the queue, or we will OOM
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -61,72 +34,14 @@ void Pile::success(int pos, vector<int> &pile, vector<int> &disallowed){
     pile[pos] = false;
 }
 
-void Pile::make_pile_iter(int target, int remaining, int pos,
-                          vector<int> &pile, vector<int> &disallowed) {
-    struct pile_args {
-        int target;
-        int remaining;
-        int pos;
-        vector<int> pile;
-
-        pile_args(int t, int r, int p, vector<int> pl)
-                : target(t), remaining(r), pos(p), pile(std::move(pl))
-        {}
-    };
-
-//    vector<pile_args> arg_stack;
-    stack<pile_args> arg_stack;
-    vector<int> n(pile);
-    arg_stack.emplace(target, remaining, pos, n);
-
-    while (!arg_stack.empty()){
-//        cout<<"----"<<arg_stack.size()<<endl;
-        auto s = arg_stack.top();
-        arg_stack.pop();
-
-        if (disallowed[s.pos]) {
-            if(s.pos==0) continue;
-            vector<int> new_pile(s.pile);
-            arg_stack.emplace(s.target, s.remaining, s.pos-1, new_pile);
-            continue;
-        }
-
-        if (target>remaining) {
-            continue;
-        }
-
-        if (cubes[s.pos]==s.target) {
-            success(s.pos, s.pile, disallowed);
-            continue;
-        }
-
-        if (s.pos==0) continue;
-        if (s.target - cubes[s.pos]>0) {
-            vector<int> new_pile(s.pile);
-
-            new_pile[s.pos]=true;
-            arg_stack.emplace(s.target-cubes[s.pos], s.remaining-cubes[s.pos], s.pos-1, new_pile);
-        }
-        {
-            vector<int> new_pile(s.pile);
-            new_pile[s.pos]=false;
-            arg_stack.emplace(s.target, s.remaining-cubes[s.pos], s.pos-1, new_pile);
-        }
-    }
-}
-
 void Pile::make_pile(int target, int remaining, int pos,
                vector<int> &pile, vector<int> &disallowed){
 
-    while(disallowed[pos]){
-        pos-=1;
+    if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
         if (pos==0) return;
+        make_pile(target, remaining, pos - 1, pile, disallowed);
+        return;
     }
-//    if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
-//        if (pos==0) return;
-//        make_pile(target, remaining, pos - 1, pile, disallowed);
-//        return;
-//    }
 
     if (target>remaining) {
         return;
@@ -164,6 +79,7 @@ vector<vector<int>> init_distribution(int n_cubes, int n_piles){
         if (cubes[n_cubes-pile_num]+cubes[n_cubes-pile_num-1]>target){
             piles[pile_num][n_cubes-pile_num-1]=true;
         }
+
     }
 
     return piles;
@@ -214,15 +130,15 @@ void start_source(Pile *pile, int target, int n_cubes, vector<int> assigned_pile
 }
 
 void start_thread(Pile *pile, int target, int n_cubes, vector<int>assigned_pile, int start_pos){
-    const size_t N_DEQUEUE=100;
+    const size_t N_DEQUEUE=1;
     vector<int> disallowed[N_DEQUEUE];
 
     while(true){
         if (pile->is_done()) return;
-//        auto n = pile->source_queue->try_dequeue_bulk(disallowed, N_DEQUEUE);
-        int n=0;
+        auto n = pile->source_queue->try_dequeue_bulk(disallowed, N_DEQUEUE);
+
         if (n==0){
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }else{
             (*pile->queue_stats).n_deqeueued+=n;
             for (auto i = n; i != 0; --i) {

@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
     int n_piles = input_params.n_piles;
     int n_threads = input_params.n_threads;
 
-    auto filter = Filter("/Users/rvilim/repos/piles/cubes_8", n_cubes);
+//    auto filter = Filter("/Users/rvilim/repos/piles/cubes_8", n_cubes);
 
     std::vector<QueueStats> queue_stats(n_piles, {0, 0}); // Create a vector of 10 QueueStats objects, all initialized to zero
 
@@ -98,12 +98,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-//    auto m = thread(monitor, &queues, &stop, &queue_stats);
+    auto m = thread(monitor, &queues, &stop, &queue_stats);
 
     for(auto & pile_thread : pile_threads){
         pile_thread.join();
     }
-//    m.join();
+    m.join();
 
     auto stop_time = chrono::high_resolution_clock::now();
     auto duration = duration_cast<chrono::milliseconds>(stop_time-start_time);
