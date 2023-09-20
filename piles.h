@@ -21,8 +21,8 @@ class Pile {
 public:
     Pile(int piles, int cubes, BlockingConcurrentQueue<vector<int>> &src,
          BlockingConcurrentQueue<vector<int>> &dest,  int pile_num, atomic_bool *global_stop,
-         QueueStats &queue_statistics
-
+         QueueStats &queue_statistics,
+         Filter &filter
          ) {
         // Hack
         if (pile_num==0){
@@ -38,7 +38,7 @@ public:
         n_cubes = cubes;
         n_piles = piles;
         queue_stats = &queue_statistics;
-//        diophantine_filter = &filter;
+        diophantine_filter = &filter;
     }
 
     void make_pile(int target, int remaining, int pos,
@@ -57,7 +57,7 @@ private:
 //    Filter *diophantine_filter = new Filter("/Users/rvilim/repos/piles/cubes_6", 90);
     int pile_number;
     atomic_bool *stop;
-//    Filter *diophantine_filter;
+    Filter *diophantine_filter;
     void success(int pos, vector<int> &pile, vector<int> &disallowed);
 };
 

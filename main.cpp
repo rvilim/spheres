@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
     int n_piles = input_params.n_piles;
     int n_threads = input_params.n_threads;
 
-//    auto filter = Filter("/Users/rvilim/repos/piles/cubes_8", n_cubes);
+    auto filter = Filter("/Users/rvilim/repos/piles/cubes_8", n_cubes);
 
     std::vector<QueueStats> queue_stats(n_piles, {0, 0}); // Create a vector of 10 QueueStats objects, all initialized to zero
 
@@ -82,10 +82,10 @@ int main(int argc, char *argv[]) {
     atomic_bool stop = false;
     vector<BlockingConcurrentQueue<vector<int>>> queues(n_piles);
 
-    piles.emplace_back(n_piles, n_cubes, queues[0], queues[0],  0, &stop, queue_stats[0]);
+    piles.emplace_back(n_piles, n_cubes, queues[0], queues[0],  0, &stop, queue_stats[0], filter);
 
     for(int i=1;i<n_piles;i++){
-        piles.emplace_back(n_piles, n_cubes, queues[i-1], queues[i], i, &stop, queue_stats[i]);
+        piles.emplace_back(n_piles, n_cubes, queues[i-1], queues[i], i, &stop, queue_stats[i], filter);
     }
 
     auto start_time = chrono::high_resolution_clock::now();

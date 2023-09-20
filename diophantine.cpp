@@ -33,14 +33,20 @@ void Filter::read_filters(){
             }
 
             filters[rhs-1].emplace_back(new_filter);
+            keys.emplace_back(rhs-1);
         }
     }
     infile.close();
 
+    std::sort(keys.begin(), keys.end()); // {1 1 2 3 4 4 5}
+
+    auto last = std::unique(keys.begin(), keys.end());
+    // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
+    keys.erase(last, keys.end());
 }
 
 bool Filter::find(const vector<int>& pile) {
-    for(int i=0;i<pile.size();i++){
+    for(int i:keys){
         if (pile[i]==false) {
             auto v = filters.find(i);
             if (v!=filters.end()) {

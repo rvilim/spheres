@@ -29,6 +29,7 @@ public:
 private:
     string filename;
     int n_cubes;
+    vector<int> keys;
 
     unordered_map<int, vector<vector<int>>> filters;
     static std::vector<std::string> split(const std::string& str, char delim);

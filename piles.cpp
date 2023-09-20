@@ -26,7 +26,11 @@ void Pile::success(int pos, vector<int> &pile, vector<int> &disallowed){
     while (dest_queue->size_approx()>10000000){ // Don't let too many stack up on the queue, or we will OOM
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
+
+    if (pile_number>=5 || !diophantine_filter->find(pile)) {
     dest_queue->enqueue(result);
+    queue_stats->n_queued+=1;
+    }
 
     if(pile_number==n_piles-1){
         *stop= true;
@@ -130,7 +134,7 @@ void start_source(Pile *pile, int target, int n_cubes, vector<int> assigned_pile
 }
 
 void start_thread(Pile *pile, int target, int n_cubes, vector<int>assigned_pile, int start_pos){
-    const size_t N_DEQUEUE=1;
+    const size_t N_DEQUEUE=5;
     vector<int> disallowed[N_DEQUEUE];
 
     while(true){
@@ -138,7 +142,7 @@ void start_thread(Pile *pile, int target, int n_cubes, vector<int>assigned_pile,
         auto n = pile->source_queue->try_dequeue_bulk(disallowed, N_DEQUEUE);
 
         if (n==0){
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }else{
             (*pile->queue_stats).n_deqeueued+=n;
             for (auto i = n; i != 0; --i) {
@@ -158,9 +162,9 @@ void monitor(vector<BlockingConcurrentQueue<vector<int>>> *queues, atomic_bool *
     while (true){
         system("clear");
         for(int i=0; i<queues->size();i++){
-            std::cout<<i<<" "<<(*queues)[i].size_approx()<<" n_dequeued: "<< (*queue_stats)[i].n_deqeueued<<endl;
+            std::cout<<i<<" "<<(*queues)[i].size_approx()<<" n_dequeued: "<< (*queue_stats)[i].n_deqeueued<<" n_enqueued: "<< (*queue_stats)[i].n_queued<<endl;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         if (*global_stop){
             return;
         }
