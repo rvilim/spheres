@@ -27,10 +27,10 @@ void Pile::success(int pos, vector<int> &pile, vector<int> &disallowed){
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 
-    if (pile_number>=5 || !diophantine_filter->find(pile)) {
+//    if (pile_number>=4 || !diophantine_filter->find(pile)) {
     dest_queue->enqueue(result);
     queue_stats->n_queued+=1;
-    }
+//    }
 
     if(pile_number==n_piles-1){
         *stop= true;
@@ -57,6 +57,7 @@ void Pile::make_pile(int target, int remaining, int pos,
     }
 
     if (pos==0) return;
+
 
     // Call the function again with the bit in question both set and unset
     if (target-cubes[pos]>0) {
@@ -142,7 +143,7 @@ void start_thread(Pile *pile, int target, int n_cubes, vector<int>assigned_pile,
         auto n = pile->source_queue->try_dequeue_bulk(disallowed, N_DEQUEUE);
 
         if (n==0){
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }else{
             (*pile->queue_stats).n_deqeueued+=n;
             for (auto i = n; i != 0; --i) {
