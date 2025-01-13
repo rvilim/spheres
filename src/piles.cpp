@@ -73,10 +73,10 @@ void success(int pos, vector<int> &pile, vector<int> &disallowed){
     //         result[i]=queue_index+1;
     //     }
     // }
-    for(int i=0; i<pile.size(); i++) {
-        cout << pile[i];
-    }
-    cout << endl;
+    // for(int i=0; i<pile.size(); i++) {
+    //     cout << pile[i];
+    // }
+    // cout << endl;
 //    if (queues[queue_index].size_approx()>1000000){
 //        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 //    }
