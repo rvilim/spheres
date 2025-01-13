@@ -15,6 +15,8 @@ void print_piles(vector<int> piles, int n_piles);
 int next_allowed(int pos, int &remaining, vector<int> &disallowed);
 vector<vector<int>> make_pile(int target, int remaining, int pos,
                             vector<int> &pile, vector<int> &disallowed);
+void make_pile_old(int target, int remaining, int pos,
+               vector<int> &pile, vector<int> &disallowed);
 int calc_remaining(vector<int> disallowed, int n_cubes);
 
 int sum_pile(vector<int> pile);

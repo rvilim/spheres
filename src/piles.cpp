@@ -73,10 +73,10 @@ void success(int pos, vector<int> &pile, vector<int> &disallowed){
     //         result[i]=queue_index+1;
     //     }
     // }
-    // for(int i=0; i<pile.size(); i++) {
-    //     cout << pile[i];
-    // }
-    // cout << endl;
+    for(int i=0; i<pile.size(); i++) {
+        cout << pile[i];
+    }
+    cout << endl;
 //    if (queues[queue_index].size_approx()>1000000){
 //        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 //    }
@@ -94,6 +94,39 @@ void success(int pos, vector<int> &pile, vector<int> &disallowed){
 // Pile: 00000000000000000000000000000000000000000000000000000001000
 // Disallowed: 12223113031012033230002000000000000000000000021300000000321
 
+
+void make_pile_old(int target, int remaining, int pos,
+               vector<int> &pile, vector<int> &disallowed){
+
+//    cout<<target<<endl;
+    if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
+        if (pos==0) return;
+        make_pile_old(target, remaining, pos - 1, pile, disallowed);
+        return;
+    }
+
+    if (target>remaining) {
+        return;
+    }
+
+    if (cubes[pos]==target) { // Success! we have a pile
+        success( pos, pile, disallowed);
+        return;
+    }
+
+    if (pos==0) return;
+//    auto next_pos = next_allowed(pos, remaining, disallowed);
+//    if (next_poes==-1) return
+
+    // Call the function again with the bit in question both set and unset
+    if (target-cubes[pos]>0) {
+        pile[pos] = true;
+        make_pile_old(target-cubes[pos], remaining-cubes[pos], pos-1,  pile, disallowed);
+        pile[pos] = false;
+    }
+    make_pile_old(target, remaining-cubes[pos], pos-1, pile, disallowed);
+
+}
 
 vector<vector<int>> make_pile(int target, int remaining, int pos,
                             vector<int> &pile, vector<int> &disallowed) {
@@ -117,6 +150,7 @@ vector<vector<int>> make_pile(int target, int remaining, int pos,
 
     if (pos == 0) return solutions;
 
+    
     // Try setting the current position
     if (target - cubes[pos] > 0) {
         pile[pos] = true;
@@ -233,6 +267,9 @@ PYBIND11_MODULE(piles, m) {
         Calculate the remaining sum after removing disallowed cubes
     )pbdoc");
     m.def("make_pile", &make_pile, R"pbdoc(
+    make that pile
+    )pbdoc");
+    m.def("make_pile_old", &make_pile_old, R"pbdoc(
     make that pile
     )pbdoc");
 
