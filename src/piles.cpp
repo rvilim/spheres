@@ -224,6 +224,9 @@ PYBIND11_MODULE(piles, m) {
     m.def("init_remaining", &init_remaining, R"pbdoc(
         Initialize the remaining values for each pile
     )pbdoc");
+    m.def("calc_remaining", &calc_remaining, R"pbdoc(
+        Calculate the remaining sum after removing disallowed cubes
+    )pbdoc");
     m.def("make_pile", &make_pile, R"pbdoc(
     make that pile
     )pbdoc");
