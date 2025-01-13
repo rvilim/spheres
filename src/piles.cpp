@@ -95,36 +95,41 @@ void success(int pos, vector<int> &pile, vector<int> &disallowed){
 // Disallowed: 12223113031012033230002000000000000000000000021300000000321
 
 
-void make_pile(int target, int remaining, int pos,
-               vector<int> &pile, vector<int> &disallowed){
-
-    if (disallowed[pos]) { // If the one we are on is disallowed, just skip it.
-        if (pos==0) return;
-        make_pile(target, remaining, pos - 1, pile, disallowed);
-        return;
+vector<vector<int>> make_pile(int target, int remaining, int pos,
+                            vector<int> &pile, vector<int> &disallowed) {
+    vector<vector<int>> solutions;
+    
+    if (disallowed[pos]) {
+        if (pos == 0) return solutions;
+        return make_pile(target, remaining, pos - 1, pile, disallowed);
     }
 
-    if (target>remaining) {
-        return;
+    if (target > remaining) {
+        return solutions;
     }
 
-    if (cubes[pos]==target) { // Success! we have a pile
-        success( pos, pile, disallowed);
-        return;
-    }
-
-    if (pos==0) return;
-//    auto next_pos = next_allowed(pos, remaining, disallowed);
-//    if (next_poes==-1) return
-
-    // Call the function again with the bit in question both set and unset
-    if (target-cubes[pos]>0) {
+    if (cubes[pos] == target) {
         pile[pos] = true;
-        make_pile(target-cubes[pos], remaining-cubes[pos], pos-1,  pile, disallowed);
+        solutions.push_back(pile);
+        pile[pos] = false;
+        return solutions;
+    }
+
+    if (pos == 0) return solutions;
+
+    // Try setting the current position
+    if (target - cubes[pos] > 0) {
+        pile[pos] = true;
+        auto sub_solutions = make_pile(target - cubes[pos], remaining - cubes[pos], pos - 1, pile, disallowed);
+        solutions.insert(solutions.end(), sub_solutions.begin(), sub_solutions.end());
         pile[pos] = false;
     }
-    make_pile(target, remaining-cubes[pos], pos-1, pile, disallowed);
 
+    // Try without setting the current position
+    auto more_solutions = make_pile(target, remaining - cubes[pos], pos - 1, pile, disallowed);
+    solutions.insert(solutions.end(), more_solutions.begin(), more_solutions.end());
+
+    return solutions;
 }
 
 int next_allowed(int pos, int &remaining, vector<int> &disallowed){
