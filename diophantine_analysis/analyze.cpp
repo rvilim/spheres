@@ -31,19 +31,10 @@ private:
         double probability;
         int matched;
         int total;
+        bitset<BITS> pattern;
+        bitset<BITS> required_bits;
+        bitset<BITS> new_bits;
     };
-
-    // Add decision tree node structure
-    struct TreeNode {
-        int bit_position = -1;  // -1 indicates leaf node
-        bool is_leaf = false;
-        int classification = -1;  // Only valid for leaf nodes, -1 means no classification
-        double probability = 0.0;
-        unique_ptr<TreeNode> left;   // bit is 0
-        unique_ptr<TreeNode> right;  // bit is 1
-    };
-    
-    unique_ptr<TreeNode> root;
 
     bool save_filters_to_cache() {
         std::ofstream cache(cache_path, std::ios::binary);
@@ -123,120 +114,122 @@ private:
         }
     }
 
+    // Add TreeNode structure
+    struct TreeNode {
+        bool is_leaf = false;
+        int bit_position = -1;  // The bit we're splitting on
+        EntropyResult entropy_result;  // Added EntropyResult
+        int classification = -1;  // Classification for leaf nodes
+        unique_ptr<TreeNode> left;  // Child when bit is 0
+        unique_ptr<TreeNode> right; // Child when bit is 1
+    };
 
+    unique_ptr<TreeNode> root;  // Root of the decision tree
 
-
-    unique_ptr<TreeNode> build_tree_recursive(
-        const vector<bitset<BITS>>& patterns,
-        const vector<int>& classifications,
-        bitset<BITS> current_pattern,
-        vector<bool> available_bits,
-        int depth = 0
-    ) {
-        // Print progress information
-        cout << string(depth * 2, ' ') << "Building tree node at depth " << depth 
-             << " with " << patterns.size() << " patterns" << endl;
+    unique_ptr<TreeNode> build_decision_tree(vector<int> set_bit_numbers, vector<int> unset_bit_numbers, int depth) {
+        cout<<depth<<endl;
+        bitset<BITS> set_bits;
+        bitset<BITS> unset_bits;
         
+        for (int bit : set_bit_numbers) {
+            set_bits.set(bit);
+        }
+        
+        for (int bit : unset_bit_numbers) {
+            unset_bits.set(bit); 
+        }
+
+        auto best_entropy_pattern = find_max_entropy_pattern(1, set_bit_numbers, unset_bit_numbers);
+        
+        // Create new node
         auto node = make_unique<TreeNode>();
-        
-        // Create leaf node if we've reached depth 2 or if all patterns have same classification
-        if (depth >= 2 || patterns.empty()) {
+
+        // If entropy is 0 or we've reached max depth, create leaf node
+        if (best_entropy_pattern.entropy == 0 || depth >= 6) {  // Add max depth limit
             node->is_leaf = true;
-            // Find majority class
-            map<int, int> class_counts;
-            for (int c : classifications) class_counts[c]++;
-            
-            int max_count = 0;
-            for (const auto& [c, count] : class_counts) {
-                if (count > max_count) {
-                    max_count = count;
-                    node->classification = c;
-                }
-            }
-            node->probability = classifications.empty() ? 0.0 : 
-                static_cast<double>(max_count) / classifications.size();
+            node->entropy_result = best_entropy_pattern;
+            // Determine classification based on probability
+            node->classification = (best_entropy_pattern.probability >= 0.5) ? 1 : 0;
             return node;
         }
-        
-        // Find best bit to split on using entropy - parallelize this section
-        int best_bit = -1;
-        double best_entropy = -1;
-        
-        #pragma omp parallel
-        {
-            int local_best_bit = -1;
-            double local_best_entropy = -1;
-            
-            #pragma omp for schedule(dynamic)
-            for (size_t bit = 0; bit < BITS; bit++) {
-                if (!available_bits[bit]) continue;
-                
-                bitset<BITS> test_pattern = current_pattern;
-                test_pattern.set(bit);
-                EntropyResult entropy = calculate_entropy(test_pattern, current_pattern);
-                
-                if (entropy.entropy > local_best_entropy) {
-                    local_best_entropy = entropy.entropy;
-                    local_best_bit = bit;
-                }
-            }
-            
-            #pragma omp critical
-            {
-                if (local_best_entropy > best_entropy) {
-                    best_entropy = local_best_entropy;
-                    best_bit = local_best_bit;
-                }
+
+        // Find the new bit that was set (there should be exactly one since n=1)
+        int split_bit = -1;
+        for (size_t i = 0; i < BITS; i++) {
+            if (best_entropy_pattern.new_bits[i]) {
+                split_bit = i;
+                break;
             }
         }
-        
-        // If no good split found, create leaf with majority class
-        if (best_bit == -1) {
+
+        if (split_bit == -1) {
+            // No good split found, create leaf node
             node->is_leaf = true;
-            map<int, int> class_counts;
-            for (int c : classifications) class_counts[c]++;
-            
-            int max_count = 0;
-            for (const auto& [c, count] : class_counts) {
-                if (count > max_count) {
-                    max_count = count;
-                    node->classification = c;
-                }
-            }
-            node->probability = static_cast<double>(max_count) / classifications.size();
+            node->entropy_result = best_entropy_pattern;
+            node->classification = (best_entropy_pattern.probability >= 0.5) ? 1 : 0;
             return node;
         }
-        
-        // Split patterns based on bit
-        vector<bitset<BITS>> left_patterns, right_patterns;
-        vector<int> left_classes, right_classes;
-        
-        for (size_t i = 0; i < patterns.size(); i++) {
-            if (patterns[i][best_bit]) {
-                right_patterns.push_back(patterns[i]);
-                right_classes.push_back(classifications[i]);
-            } else {
-                left_patterns.push_back(patterns[i]);
-                left_classes.push_back(classifications[i]);
-            }
-        }
-        
+
         // Create decision node
-        node->bit_position = best_bit;
-        available_bits[best_bit] = false;
+        node->is_leaf = false;
+        node->bit_position = split_bit;
+        node->entropy_result = best_entropy_pattern;
+
+        // Create children
+        vector<int> next_set_bits = set_bit_numbers;
+        vector<int> next_unset_bits = unset_bit_numbers;
+
+        // Right child (bit is set)
+        next_set_bits.push_back(split_bit);
+        node->right = build_decision_tree(next_set_bits, next_unset_bits, depth + 1);
+
+        // Left child (bit is not set)
+        next_set_bits.pop_back();
+        next_unset_bits.push_back(split_bit);
+        node->left = build_decision_tree(next_set_bits, next_unset_bits, depth + 1);
+
+        return node;
+    }
+
+    // Add helper function for recursive DOT generation
+    void tree_to_dot_recursive(std::ostream& out, const TreeNode* node, int& node_count) const {
+        if (!node) return;
         
-        // Recursively build children
-        node->left = build_tree_recursive(left_patterns, left_classes, current_pattern, available_bits, depth + 1);
-        current_pattern.set(best_bit);
-        node->right = build_tree_recursive(right_patterns, right_classes, current_pattern, available_bits, depth + 1);
+        int current_node = node_count++;
         
-        // Print when returning from important nodes
-        if (depth < 3) {
-            cout << string(depth * 2, ' ') << "Completed node at depth " << depth 
-                 << " (bit: " << best_bit << ")" << endl;
+        // Node attributes
+        if (node->is_leaf) {
+            out << "    node" << current_node << " [shape=box,label=\"Class: " 
+                << node->classification << "\\nP: " 
+                << std::fixed << std::setprecision(2) << node->entropy_result.probability 
+                << " (" << node->entropy_result.matched << "/" << node->entropy_result.total << ")"
+                << "\\nEntropy: " << (-node->entropy_result.probability * std::log2(node->entropy_result.probability) 
+                                    - (1-node->entropy_result.probability) * std::log2(1-node->entropy_result.probability))
+                << "\"];\n";
+        } else {
+            out << "    node" << current_node << " [label=\"Bit " 
+                << node->bit_position << "\\nP: " 
+                << std::fixed << std::setprecision(2) << node->entropy_result.probability 
+                << " (" << node->entropy_result.matched << "/" << node->entropy_result.total << ")"
+                << "\\nEntropy: " << (-node->entropy_result.probability * std::log2(node->entropy_result.probability) 
+                                    - (1-node->entropy_result.probability) * std::log2(1-node->entropy_result.probability))
+                << "\"];\n";
         }
         
-        return node;
+        // Recursively process children
+        if (node->left) {
+            int left_node = node_count;
+            out << "    node" << current_node << " -> node" << left_node 
+                << " [label=\"0\"];\n";
+            tree_to_dot_recursive(out, node->left.get(), node_count);
+        }
+        
+        if (node->right) {
+            int right_node = node_count;
+            out << "    node" << current_node << " -> node" << right_node 
+                << " [label=\"1\"];\n";
+            tree_to_dot_recursive(out, node->right.get(), node_count);
+        }
     }
 
 public:
@@ -360,15 +353,16 @@ public:
         return patterns;
     }
 
-    EntropyResult calculate_entropy(const bitset<BITS>& pattern, const bitset<BITS>& required_bits) const {
+    EntropyResult calculate_entropy(const bitset<BITS>& pattern, const bitset<BITS>& required_set_bits, const bitset<BITS>& required_unset_bits) const {
         int matched = 0;
         int total = 0;
         EntropyResult result;
 
-        // Second pass: calculate entropy directly
         for (const auto& [target, filters] : filters_by_target) {
             for (const auto& filter : filters) {
-                if ((required_bits & filter) == required_bits) {
+                // Check both required set and unset bits conditions
+                if ((required_set_bits & filter) == required_set_bits && 
+                    (required_unset_bits & filter).none()) {
                     if ((pattern & filter) == pattern) {
                         matched += 1;
                     }
@@ -390,14 +384,21 @@ public:
         result.probability = p;
         result.matched = matched;
         result.total = total;
+        result.pattern = pattern;
+        result.required_bits = required_set_bits;
+        result.new_bits = pattern & ~required_set_bits;
+        
         return result;
     }
 
-    bitset<BITS> find_max_entropy_pattern(size_t n, 
+    EntropyResult find_max_entropy_pattern(size_t n, 
                                           vector<int> required_set,
                                           vector<int> required_not_set) {
 
         
+        EntropyResult best_entropy;
+        best_entropy.entropy = 0.0;
+
         bitset<BITS> required_bits;
         for (int bit : required_set) {
             required_bits.set(bit);
@@ -405,39 +406,74 @@ public:
         // Generate all possible n-bit patterns
         auto patterns = generate_n_bit_patterns(n, required_set, required_not_set);
         
-        bitset<BITS> best_pattern;
         double max_entropy = -1.0;
-        cout<<patterns.size()<<" possible patterns"<<endl;
+        // cout<<patterns.size()<<" possible patterns"<<endl;
         // Find pattern with maximum entropy
         #pragma omp parallel
         {
-            bitset<BITS> local_best_pattern;
-            double local_max_entropy = -1.0;
+            EntropyResult local_best_entropy;
+            local_best_entropy.entropy = 0;
             
             #pragma omp for schedule(dynamic)
             for (size_t p = 0; p < patterns.size(); p++) {
                 const auto& pattern = patterns[p];
 
-                EntropyResult entropy = calculate_entropy(pattern, required_bits);
-                if (entropy.entropy > local_max_entropy) {
-                    local_max_entropy = entropy.entropy;
-                    local_best_pattern = pattern;
+                bitset<BITS> required_unset_bits;
+                for (int bit : required_not_set) {
+                    required_unset_bits.set(bit);
+                }
+                EntropyResult entropy = calculate_entropy(pattern, required_bits, required_unset_bits);
+                if (entropy.entropy > local_best_entropy.entropy) {
                     #pragma omp critical
                     {
-                        if (entropy.entropy > max_entropy) {
-                            max_entropy = entropy.entropy;
-                            best_pattern = pattern;
-                            cout << "New max entropy: " << entropy.entropy << " with pattern: " << pattern << endl;
-                            cout << "Probability: " << entropy.probability << endl;
-                            cout << "Matches: " << entropy.matched << " / " << entropy.total << endl;
+                        if (entropy.entropy > best_entropy.entropy) {
+                            best_entropy = entropy;
                         }
                     }
                 }
             }
         }
-        return best_pattern;
+        return best_entropy;
     }
 
+    // Add method to start tree construction
+    void construct_decision_tree() {
+        vector<int> set_bits;
+        vector<int> unset_bits;
+        root = build_decision_tree(set_bits, unset_bits, 0);
+    }
+
+    // Add method to classify new patterns
+    bool classify(const bitset<BITS>& pattern) const {
+        if (!root) return false;
+        
+        TreeNode* current = root.get();
+        while (!current->is_leaf) {
+            if (pattern[current->bit_position]) {
+                current = current->right.get();
+            } else {
+                current = current->left.get();
+            }
+        }
+        return current->classification == 1;
+    }
+
+    // Print tree in DOT format to terminal
+    void print_tree_dot() const {
+        if (!root) return;
+        
+        // Write DOT header
+        cout << "digraph DecisionTree {\n";
+        cout << "    node [fontname=\"Arial\"];\n";
+        cout << "    edge [fontname=\"Arial\"];\n";
+        
+        // Generate tree
+        int node_count = 0;
+        tree_to_dot_recursive(cout, root.get(), node_count);
+        
+        // Close graph
+        cout << "}\n";
+    }
 
 private:
 
@@ -451,10 +487,21 @@ int main() {
         cerr << "Failed to read filters" << endl;
         return 1;
     }
+    filter_tree.construct_decision_tree();
+    cout << "Printing decision tree in DOT format:" << endl;
+    filter_tree.print_tree_dot();
+    // vector<int> set_bits = {5};
+    // vector<int> unset_bits = {};
+    // auto best_entropy_pattern = filter_tree.find_max_entropy_pattern(1, set_bits, unset_bits);
+    
+    // cout << "Best entropy pattern results:" << endl;
+    // cout << "Entropy: " << best_entropy_pattern.entropy << endl;
+    // cout << "Probability: " << best_entropy_pattern.probability << endl;
+    // cout << "Matched: " << best_entropy_pattern.matched << endl;
+    // cout << "Total: " << best_entropy_pattern.total << endl;
+    // cout << "Pattern: " << best_entropy_pattern.pattern << endl;
+    // cout << "Required bits: " << best_entropy_pattern.required_bits << endl;
 
-    vector<int> set_bits = {5};
-    vector<int> unset_bits = {};
-    filter_tree.find_max_entropy_pattern(1, set_bits, unset_bits);
 
     return 0;
 }
