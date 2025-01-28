@@ -5,6 +5,8 @@
 #include "piles.h"
 #include <cstdlib>
 #include <map>
+#include <fstream>
+#include "bitfiltertree.h"
 
 #ifdef WITH_PYTHON
 #include <pybind11/pybind11.h>
@@ -20,6 +22,20 @@ using namespace std;
 
 PileSolver::PileSolver() : sums(make_sums()), cubes(make_cubes()) {
     initialize_memoization();
+    // Initialize and load the bit filter tree
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    filter_tree = std::make_unique<BitFilterTree>();
+    auto loaded_tree = filter_tree->LoadTreeBinary("tree.bin");
+    if (!loaded_tree) {
+        std::cerr << "Failed to load bit filter tree from tree.bin" << std::endl;
+    } else {
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cout << "Successfully loaded bit filter tree in " << duration.count() << " ms" << std::endl;
+    }
+
+
 }
 
 constexpr std::array<int, 100> PileSolver::make_sums() {
@@ -66,6 +82,7 @@ int PileSolver::sum_pile(vector<int> pile) {
 
 vector<__int128> PileSolver::find_valid_patterns(int target, __int128 disallowed) {
     vector<__int128> valid_patterns;
+    
     auto it = precalculated_sums.find(target);
     if (it == precalculated_sums.end()) {
         return valid_patterns;
@@ -93,7 +110,16 @@ vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
             for (int i = 0; i <= pos; i++) {
                 new_solution[i] = (bits & ((__int128)1 << i)) ? 1 : 0;
             }
-            solutions.push_back(new_solution);
+            
+            // Convert binary pattern to vector of set bit positions
+            vector<size_t> pattern;
+            for (size_t i = 0; i < new_solution.size(); i++) {
+                if (new_solution[i]) pattern.push_back(i + 1);
+            }
+            
+            // if (!filter_tree || !filter_tree->ClassifyPattern(pattern, pile.size())) {
+                solutions.push_back(new_solution);
+            // }
         }
         return solutions;
     }
@@ -110,7 +136,16 @@ vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
 
     if (cubes[pos] == target) {
         pile[pos] = true;
-        solutions.push_back(pile);
+        // Create a FilterPattern from the current pile
+        // FilterPattern pattern;
+        vector<size_t> pattern;
+        for (int i = 0; i < pile.size(); i++) {
+            if (pile[i]) pattern.push_back(i+1);
+        }
+
+        if (!filter_tree || !filter_tree->ClassifyPattern(pattern, pile.size())) {
+            solutions.push_back(pile);
+        }
         pile[pos] = false;
     }
 
@@ -186,6 +221,38 @@ int PileSolver::calc_remaining(__int128 disallowed, int n_cubes) {
     return remaining;
 }
 
+void PileSolver::build_diophantine_tree(const string& csv_path, const string& tree_path, int max_depth) {
+    cout << "Reading filters from " << csv_path << endl;
+    if (!filter_tree->ReadFiltersFromCsv(csv_path)) {
+        cerr << "Failed to read filters" << endl;
+        return;
+    }
+
+    cout << "Building Tree" << endl;
+    // BuildTree returns bool, not a unique_ptr
+    if (!filter_tree->BuildTree(FilterPattern(), max_depth, 1)) {
+        cerr << "Failed to build tree" << endl;
+        return;
+    }
+    
+    // Save the tree
+    cout << "Saving tree to tree.bin" << endl;
+    if (!filter_tree->SaveTreeBinary(tree_path)) {
+        cerr << "Failed to save tree" << endl;
+    }
+    auto dot_tree = filter_tree->CreateDotTree();
+    std::ofstream dot_file("tree.dot");
+    if (dot_file.is_open()) {
+        dot_file << dot_tree;
+        dot_file.close();
+    }
+}
+
+bool PileSolver::classify_pattern(const vector<size_t>& set_bits, size_t max_bits) const {
+    if (!filter_tree) return false;
+    return filter_tree->ClassifyPattern(set_bits, max_bits);
+}
+
 #ifdef WITH_PYTHON
 namespace py = pybind11;
 
@@ -199,6 +266,13 @@ PYBIND11_MODULE(piles, m) {
         .def("make_pile", [](PileSolver& self, int target, int remaining, int pos, 
                             std::vector<int>& pile, int64_t disallowed) {
             return self.make_pile(target, remaining, pos, pile, (__int128)disallowed);
+        })
+        .def("build_diophantine_tree", &PileSolver::build_diophantine_tree,
+             py::arg("csv_path") = "diophantine.txt",
+             py::arg("tree_path") = "tree.bin",
+             py::arg("max_depth") = 40)
+        .def("classify_pattern", [](PileSolver& self, const std::vector<size_t>& set_bits, size_t max_bits = BITS) {
+            return self.classify_pattern(set_bits, max_bits);
         });
 
     m.doc() = R"pbdoc(

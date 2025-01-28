@@ -4,6 +4,7 @@
 #include <vector>
 #include <array>
 #include <map>
+#include "bitfiltertree.h"
 
 #ifndef PILES_PILES_H
 #define PILES_PILES_H
@@ -16,6 +17,7 @@ private:
     std::map<int, std::vector<__int128>> precalculated_sums;
     const std::array<int, 100> sums;
     const std::array<int, 100> cubes;
+    std::unique_ptr<BitFilterTree> filter_tree;
 
 public:
     PileSolver();
@@ -33,6 +35,10 @@ public:
     vector<vector<int>> init_distribution(int n_piles, int n_cubes);
     vector<int> init_remaining(vector<vector<int>> piles, int n_piles);
     int init_pos(vector<vector<int>> piles);
+
+    void build_diophantine_tree(const string& csv_path = "diophantine_small.txt", const string& tree_path = "tree.bin", int max_depth = 40);
+
+    bool classify_pattern(const vector<size_t>& set_bits, size_t max_bits) const;
 
 private:
     vector<__int128> find_valid_patterns(int target, __int128 disallowed);

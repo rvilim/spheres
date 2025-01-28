@@ -6,32 +6,32 @@ import pickle
 import tqdm
 import time
 
-def read_diophantine(pickle_filename = 'diophantine.pkl', text_filename='diophantine.txt'):
-    try:
-        with open(pickle_filename, 'rb') as f:
-            p = pickle.load(f)
-            a=sorted([(k,len(v)) for k,v in p.items()], key = lambda g: g[1], reverse=True)
-            for row in a:
-                print(row)
-            return p
+# def read_diophantine(pickle_filename = 'diophantine.pkl', text_filename='diophantine.txt'):
+#     try:
+#         with open(pickle_filename, 'rb') as f:
+#             p = pickle.load(f)
+#             a=sorted([(k,len(v)) for k,v in p.items()], key = lambda g: g[1], reverse=True)
+#             for row in a:
+#                 print(row)
+#             return p
         
-    except FileNotFoundError:
-        pass
+#     except FileNotFoundError:
+#         pass
 
-    print("diophantine pickle not found, reading", text_filename)
-    diophantine = defaultdict(list)
-    with open(text_filename) as f:
-        for line in f:
-            line_split=line.strip().split(',')
-            target = int(line_split[-1])
-            body_bits=0
-            for bit in line_split[:-1]:
-                body_bits |= 1<<(int(bit)-1)
-            diophantine[target].append(body_bits)
+#     print("diophantine pickle not found, reading", text_filename)
+#     diophantine = defaultdict(list)
+#     with open(text_filename) as f:
+#         for line in f:
+#             line_split=line.strip().split(',')
+#             target = int(line_split[-1])
+#             body_bits=0
+#             for bit in line_split[:-1]:
+#                 body_bits |= 1<<(int(bit)-1)
+#             diophantine[target].append(body_bits)
 
-    with open(pickle_filename, 'wb') as f:
-        pickle.dump(diophantine, f)
-    return diophantine
+#     with open(pickle_filename, 'wb') as f:
+#         pickle.dump(diophantine, f)
+#     return diophantine
 
 def print_piles(combination, n_piles, n_cubes):
     ok = True
@@ -61,32 +61,34 @@ def print_piles(combination, n_piles, n_cubes):
     print(" ")
     return ok
 
-def filter_diophantine(next_piles, disallowed, diophantine):
-    filtered_piles = []
-    for pile in next_piles:
-        pile_bits = pile_to_bin(pile)
-        is_valid = True
+# def filter_diophantine(next_piles, disallowed, diophantine):
+#     filtered_piles = []
+#     for pile in next_piles:
+#         pile_bits = pile_to_bin(pile)
+#         is_valid = True
 
-        # Check each bit position
-        for pos in range(len(pile)): 
-            bit = 1 << pos
-            # If this bit is not set in pile_bits and not disallowed
-            if not (pile_bits & bit) and not (disallowed & bit):
-                filters = diophantine[pos+1]
-                for filter in filters:
-                    # If all bits in the filter are set in pile_bits
-                    if filter & pile_bits == filter:
-                        # This means we found a combination of lower bits
-                        # that sum to the same value as the current position
-                        is_valid = False
-                        break
-            if not is_valid:
-                break
+#         # Check each bit position
+#         for pos in range(len(pile)): 
+#             bit = 1 << pos
+#             # If this bit is not set in pile_bits and not disallowed
+#             if not (pile_bits & bit) and not (disallowed & bit):
+#                 filters = diophantine[pos+1]
+#                 for filter in filters:
+#                     # If all bits in the filter are set in pile_bits
+#                     if filter & pile_bits == filter:
+#                         # This means we found a combination of lower bits
+#                         # that sum to the same value as the current position
+#                         is_valid = False
+#                         print(pos, bin(filter))
+
+#                         break
+#             if not is_valid:
+#                 break
                 
-        if is_valid:
-            filtered_piles.append(pile)
+#         if is_valid:
+#             filtered_piles.append(pile)
 
-    return filtered_piles
+#     return filtered_piles
 
 def pile_to_bin(pile):
     binpile = 0
@@ -120,9 +122,8 @@ def solve(n_piles, n_cubes, diophantine=None):
     for pile_idx in range(n_piles):
         s = 0
         new_combinations = []
-        
         # For each existing combination of piles
-        for prev_piles in tqdm.tqdm(pile_combinations):
+        for prev_piles in pile_combinations:
             # Calculate target and remaining for next pile
             if pile_idx == 0:
                 target = assigned_remaining[0]
@@ -141,17 +142,26 @@ def solve(n_piles, n_cubes, diophantine=None):
             # Generate next pile
             next_piles = solver.make_pile(target, remaining, start_pos, assigned_pile, curr_disallowed)
 
-            if pile_idx < 1:
-                before = len(next_piles)
-                start_time = time.time()
-                next_piles = filter_diophantine(next_piles, curr_disallowed, diophantine)
-                print(pile_idx, 'before', before, 'after', len(next_piles), 'took', time.time()-start_time)
+            # if pile_idx < 1:
+            #     before = len(next_piles)
+            #     start_time = time.time()
+            #     next_piles = filter_diophantine(next_piles, curr_disallowed, diophantine)
+            #     print(pile_idx, 'before', before, 'after', len(next_piles), 'took', time.time()-start_time)
 
             s += len(next_piles)
             # Add new combinations
             for next_pile in next_piles:
                 new_combination = prev_piles + [next_pile]
                 new_combinations.append(new_combination)
+
+            if pile_idx==0:
+                # Print each combination to CSV file
+                with open('piles.csv', 'w') as f:
+                    for combination in new_combinations:
+                        # Convert each pile to a string of 0s and 1s
+                        pile_str = ','.join(''.join(str(x) for x in pile) for pile in combination)
+                        f.write(pile_str + '\n')
+                break
         nums[int(pile_idx+1)] = s
         pile_combinations = new_combinations
     return nums, pile_combinations
@@ -165,17 +175,18 @@ def main():
     n_piles = args.n_piles
     n_cubes = args.n_cubes
 
-    diophantine = read_diophantine()
+    # diophantine = read_diophantine()
 
     start = time.time()
-    nums, pile_combinations = solve(n_piles, n_cubes, diophantine)
+    nums, pile_combinations = solve(n_piles, n_cubes)
+    print(time.time())
     print(f'time taken: {time.time()-start:.2f}')
     # Print all solutions
-    for combination in pile_combinations:
-        ok = print_piles(combination, n_piles, n_cubes)
-        if not ok:
-            import sys 
-            sys.exit(1)
+    # for combination in pile_combinations:
+        # ok = print_piles(combination, n_piles, n_cubes)
+        # if not ok:
+        #     import sys 
+        #     sys.exit(1)
 
     print(" ")
 
@@ -185,7 +196,7 @@ def main():
         print(f"{pile_num}\t{solutions}")
 
 def test_diophantine():
-    diophantine = read_diophantine()
+    # diophantine = read_diophantine()
 
     # 6^3+8^3+10^3 are all set and 12^3 is not set, and we could have set 12
     piles = [[0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]

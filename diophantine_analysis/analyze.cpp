@@ -716,7 +716,7 @@ int main() {
     BitFilterTree filter_tree;
     
     cout << "Reading filters" << endl;
-    if (!filter_tree.ReadFiltersFromCsv("diophantine_small.txt")) {
+    if (!filter_tree.ReadFiltersFromCsv("../diophantine.txt")) {
         cerr << "Failed to read filters" << endl;
         return 1;
     }
