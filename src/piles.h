@@ -38,7 +38,7 @@ public:
 
     void build_diophantine_tree(const string& csv_path = "diophantine_small.txt", const string& tree_path = "tree.bin", int max_depth = 40);
 
-    bool classify_pattern(const vector<size_t>& set_bits, size_t max_bits) const;
+    bool classify_pattern(const vector<int>& pile) const;
 
 private:
     vector<__int128> find_valid_patterns(int target, __int128 disallowed);

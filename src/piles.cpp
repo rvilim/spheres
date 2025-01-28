@@ -98,6 +98,20 @@ vector<__int128> PileSolver::find_valid_patterns(int target, __int128 disallowed
     return valid_patterns;
 }
 
+bool PileSolver::classify_pattern(const vector<int>& pile) const {
+    if (!filter_tree) return false;
+    
+    // Convert pile vector to __uint128_t
+    __uint128_t set_bits = 0;
+    for (size_t i = 0; i < pile.size(); i++) {
+        if (pile[i]) {
+            set_bits |= ((__uint128_t)1 << i);
+        }
+    }
+    
+    return filter_tree->ClassifyPattern(set_bits, pile.size());
+}
+
 vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
                                           vector<int> &pile, __int128 disallowed) {
     vector<vector<int>> solutions;
@@ -111,15 +125,10 @@ vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
                 new_solution[i] = (bits & ((__int128)1 << i)) ? 1 : 0;
             }
             
-            // Convert binary pattern to vector of set bit positions
-            vector<size_t> pattern;
-            for (size_t i = 0; i < new_solution.size(); i++) {
-                if (new_solution[i]) pattern.push_back(i + 1);
-            }
-            
-            // if (!filter_tree || !filter_tree->ClassifyPattern(pattern, pile.size())) {
+            // Convert pile directly to __uint128_t for classification
+            if (!filter_tree || !classify_pattern(new_solution)) {
                 solutions.push_back(new_solution);
-            // }
+            }
         }
         return solutions;
     }
@@ -136,14 +145,7 @@ vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
 
     if (cubes[pos] == target) {
         pile[pos] = true;
-        // Create a FilterPattern from the current pile
-        // FilterPattern pattern;
-        vector<size_t> pattern;
-        for (int i = 0; i < pile.size(); i++) {
-            if (pile[i]) pattern.push_back(i+1);
-        }
-
-        if (!filter_tree || !filter_tree->ClassifyPattern(pattern, pile.size())) {
+        if (!filter_tree || !classify_pattern(pile)) {
             solutions.push_back(pile);
         }
         pile[pos] = false;
@@ -248,11 +250,6 @@ void PileSolver::build_diophantine_tree(const string& csv_path, const string& tr
     }
 }
 
-bool PileSolver::classify_pattern(const vector<size_t>& set_bits, size_t max_bits) const {
-    if (!filter_tree) return false;
-    return filter_tree->ClassifyPattern(set_bits, max_bits);
-}
-
 #ifdef WITH_PYTHON
 namespace py = pybind11;
 
@@ -271,8 +268,8 @@ PYBIND11_MODULE(piles, m) {
              py::arg("csv_path") = "diophantine.txt",
              py::arg("tree_path") = "tree.bin",
              py::arg("max_depth") = 40)
-        .def("classify_pattern", [](PileSolver& self, const std::vector<size_t>& set_bits, size_t max_bits = BITS) {
-            return self.classify_pattern(set_bits, max_bits);
+        .def("classify_pattern", [](PileSolver& self, const std::vector<int>& pile) {
+            return self.classify_pattern(pile);
         });
 
     m.doc() = R"pbdoc(
