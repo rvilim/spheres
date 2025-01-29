@@ -102,13 +102,20 @@ bool PileSolver::classify_pattern(const vector<int>& pile) const {
     if (!filter_tree) return false;
     
     // Convert pile vector to __uint128_t
-    __uint128_t set_bits = 0;
+    // __uint128_t set_bits = 0;
+    // for (size_t i = 0; i < pile.size(); i++) {
+    //     if (pile[i]) {
+    //         set_bits |= ((__uint128_t)1 << i);
+    //     }
+    // }
+    // Convert pile vector to vector<size_t>
+    vector<size_t> set_bits;
+    set_bits.reserve(pile.size());
     for (size_t i = 0; i < pile.size(); i++) {
-        if (pile[i]) {
-            set_bits |= ((__uint128_t)1 << i);
+        if (pile[i] == 1) {
+            set_bits.push_back(i);
         }
     }
-    
     return filter_tree->ClassifyPattern(set_bits, pile.size());
 }
 
@@ -230,7 +237,7 @@ void PileSolver::build_diophantine_tree(const string& csv_path, const string& tr
         return;
     }
 
-    cout << "Building Tree" << endl;
+    cout << "Building Tree from file " << csv_path << endl;
     // BuildTree returns bool, not a unique_ptr
     if (!filter_tree->BuildTree(FilterPattern(), max_depth, 1)) {
         cerr << "Failed to build tree" << endl;
