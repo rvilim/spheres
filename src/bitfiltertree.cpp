@@ -22,13 +22,8 @@ bool BitFilterTree::SaveFiltersToCache() {
     cache.write(reinterpret_cast<const char*>(&num_patterns), sizeof(num_patterns));
     
     for (const auto& pattern : patterns_) {
-        size_t req_size = pattern.required.size();
-        cache.write(reinterpret_cast<const char*>(&req_size), sizeof(req_size));
-        cache.write(reinterpret_cast<const char*>(pattern.required.data()), req_size * sizeof(size_t));
-        
-        size_t dis_size = pattern.disallowed.size();
-        cache.write(reinterpret_cast<const char*>(&dis_size), sizeof(dis_size));
-        cache.write(reinterpret_cast<const char*>(pattern.disallowed.data()), dis_size * sizeof(size_t));
+        cache.write(reinterpret_cast<const char*>(&pattern.required), sizeof(__uint128_t));
+        cache.write(reinterpret_cast<const char*>(&pattern.disallowed), sizeof(__uint128_t));
     }
     
     return true;
@@ -48,18 +43,8 @@ bool BitFilterTree::LoadFiltersFromCache() {
     
     for (size_t i = 0; i < num_patterns; i++) {
         FilterPattern pattern;
-        size_t req_size;
-        cache.read(reinterpret_cast<char*>(&req_size), sizeof(req_size));
-        
-        pattern.required.resize(req_size);
-        cache.read(reinterpret_cast<char*>(pattern.required.data()), req_size * sizeof(size_t));
-        
-        // Read disallowed vector size and data
-        size_t dis_size;
-        cache.read(reinterpret_cast<char*>(&dis_size), sizeof(dis_size));
-        pattern.disallowed.resize(dis_size);
-        cache.read(reinterpret_cast<char*>(pattern.disallowed.data()), dis_size * sizeof(size_t));
-        
+        cache.read(reinterpret_cast<char*>(&pattern.required), sizeof(__uint128_t));
+        cache.read(reinterpret_cast<char*>(&pattern.disallowed), sizeof(__uint128_t));
         patterns_.push_back(pattern);
     }
     
@@ -76,44 +61,45 @@ void BitFilterTree::GeneratePatternsRecursive(
     // For each available position, create a pattern where that position is required
     // and try each other available position as disallowed
     for (size_t i = start_idx; i < available_positions.size(); i++) {
-        vector<size_t> new_required = current_required;
-        new_required.push_back(available_positions[i]);
+        // Create new required pattern with current bit set
+        FilterPattern pattern{0, 0};  // Initialize both fields to 0
+        
+        // Set all current required bits
+        for (size_t req_bit : current_required) {
+            SetBit(pattern.required, req_bit);
+        }
+        // Add the new required bit
+        SetBit(pattern.required, available_positions[i]);
+        
+        // Set all current disallowed bits
+        for (size_t dis_bit : current_disallowed) {
+            SetBit(pattern.disallowed, dis_bit);
+        }
         
         // For each remaining position, create a pattern with it as disallowed
         for (size_t j = 0; j < available_positions.size(); j++) {
             if (j != i) {  // Skip the required position
-                vector<size_t> new_disallowed = current_disallowed;
-                new_disallowed.push_back(available_positions[j]);
-                patterns.push_back({new_required, new_disallowed});
+                // Create a copy of the current pattern and add the new disallowed bit
+                FilterPattern new_pattern = pattern;
+                SetBit(new_pattern.disallowed, available_positions[j]);
+                patterns.push_back(new_pattern);
             }
         }
     }
 }
 
 // Add new helper method to filter patterns
-vector<FilterPattern> BitFilterTree::FilterMatchingPatterns(const vector<FilterPattern>& input_patterns, 
-                                                const FilterPattern& constraints) const {
+vector<FilterPattern> BitFilterTree::FilterMatchingPatterns(
+    const vector<FilterPattern>& input_patterns,
+    const FilterPattern& constraints) const 
+{
     vector<FilterPattern> filtered;
     for (const auto& pattern : input_patterns) {
-        bool satisfies_constraints = true;
-        
-        // Check required bits from constraints
-        for (size_t req : constraints.required) {
-            if (std::find(pattern.required.begin(), pattern.required.end(), req) == pattern.required.end()) {
-                satisfies_constraints = false;
-                break;
-            }
-        }
-        
-        // Check disallowed bits from constraints
-        for (size_t dis : constraints.disallowed) {
-            if (std::find(pattern.required.begin(), pattern.required.end(), dis) != pattern.required.end()) {
-                satisfies_constraints = false;
-                break;
-            }
-        }
-
-        if (satisfies_constraints) {
+        // Check if pattern satisfies constraints:
+        // 1. All required bits in constraints must be set in pattern.required
+        // 2. No disallowed bits in constraints can be set in pattern.required
+        if ((pattern.required & constraints.required) == constraints.required &&
+            (pattern.required & constraints.disallowed) == 0) {
             filtered.push_back(pattern);
         }
     }
@@ -133,8 +119,7 @@ BitFilterTree::EntropyMetrics BitFilterTree::CalculateEntropy(
     size_t total = filtered_patterns.size();
     
     for (const auto& pattern : filtered_patterns) {
-        if (find(pattern.required.begin(), pattern.required.end(), bit_position) 
-            != pattern.required.end()) {
+        if (IsBitSet(pattern.required, bit_position)) {
             matched++;
         }
     }
@@ -168,8 +153,8 @@ BitFilterTree::EntropyMetrics BitFilterTree::FindMaxEntropyBit(
     
     #pragma omp parallel for
     for (size_t bit = 0; bit < BITS; bit++) {
-        if (find(constraints.required.begin(), constraints.required.end(), bit) != constraints.required.end() ||
-            find(constraints.disallowed.begin(), constraints.disallowed.end(), bit) != constraints.disallowed.end()) {
+        if (IsBitSet(constraints.required, bit) ||
+            IsBitSet(constraints.disallowed, bit)) {
             continue;
         }
 
@@ -198,10 +183,11 @@ unique_ptr<BitFilterTree::TreeNode> BitFilterTree::BuildTree(
     int max_depth,
     size_t min_patterns_leaf
 ) {
+    static size_t total_leaf_patterns = 0;
+    static const size_t PROGRESS_INTERVAL = 10000;
+    
     auto node = make_unique<TreeNode>();
     
-    cout<<depth<<" "<<current_patterns.size()<<endl;
-
     if (depth >= max_depth || current_patterns.empty() || 
         current_patterns.size() <= min_patterns_leaf || 
         std::all_of(current_patterns.begin() + 1, current_patterns.end(),
@@ -211,6 +197,27 @@ unique_ptr<BitFilterTree::TreeNode> BitFilterTree::BuildTree(
             })) {
         node->is_leaf = true;
         node->patterns = current_patterns;
+
+        for (const auto& pattern : current_patterns) {
+            PrintBits(pattern.required);
+            PrintBits(pattern.disallowed);
+            cout<<endl;
+        }
+
+        // cout << "Leaf node patterns:" << endl;
+        // for (const auto& pattern : current_patterns) {
+        //     cout << "  Required:   " << std::bitset<128>(pattern.required) << endl;
+        //     cout << "  Disallowed: " << std::bitset<128>(pattern.disallowed) << endl;
+        //     cout << endl;
+        // }
+        
+        // Update total and print progress
+        total_leaf_patterns += current_patterns.size();
+        if (total_leaf_patterns / PROGRESS_INTERVAL > (total_leaf_patterns - current_patterns.size()) / PROGRESS_INTERVAL) {
+            cout << "Processed " << total_leaf_patterns << "/" << patterns_.size() 
+                 << " patterns in leaf nodes..." << endl;
+        }
+      
         return node;
     }
 
@@ -218,14 +225,15 @@ unique_ptr<BitFilterTree::TreeNode> BitFilterTree::BuildTree(
 
     // Create constraints and filter patterns for not matching case
     FilterPattern not_match_constraints = constraints;
-    not_match_constraints.disallowed.push_back(node->metrics.bit_index);
+    SetBit(not_match_constraints.disallowed, node->metrics.bit_index);
     auto not_match_patterns = FilterMatchingPatterns(current_patterns, not_match_constraints);
     node->not_match = BuildTree(not_match_constraints, not_match_patterns, depth + 1, max_depth, min_patterns_leaf);
 
     // Create constraints and filter patterns for matching case
     FilterPattern match_constraints = constraints;
-    match_constraints.required.push_back(node->metrics.bit_index);
+    SetBit(match_constraints.required, node->metrics.bit_index);
     auto match_patterns = FilterMatchingPatterns(current_patterns, match_constraints);
+
     node->match = BuildTree(match_constraints, match_patterns, depth + 1, max_depth, min_patterns_leaf);
 
     return node;
@@ -281,14 +289,8 @@ void BitFilterTree::SaveTreeBinaryRecursive(std::ofstream& out, const TreeNode* 
         out.write(reinterpret_cast<const char*>(&patterns_size), sizeof(patterns_size));
         
         for (const auto& pattern : node->patterns) {
-            size_t req_size = pattern.required.size();
-            size_t dis_size = pattern.disallowed.size();
-            
-            out.write(reinterpret_cast<const char*>(&req_size), sizeof(req_size));
-            out.write(reinterpret_cast<const char*>(pattern.required.data()), req_size * sizeof(size_t));
-            
-            out.write(reinterpret_cast<const char*>(&dis_size), sizeof(dis_size));
-            out.write(reinterpret_cast<const char*>(pattern.disallowed.data()), dis_size * sizeof(size_t));
+            out.write(reinterpret_cast<const char*>(&pattern.required), sizeof(__uint128_t));
+            out.write(reinterpret_cast<const char*>(&pattern.disallowed), sizeof(__uint128_t));
         }
     }
 
@@ -317,16 +319,8 @@ unique_ptr<BitFilterTree::TreeNode> BitFilterTree::LoadTreeBinaryRecursive(std::
         node->patterns.resize(patterns_size);
         for (size_t i = 0; i < patterns_size; i++) {
             FilterPattern pattern;
-            size_t req_size, dis_size;
-            
-            in.read(reinterpret_cast<char*>(&req_size), sizeof(req_size));
-            pattern.required.resize(req_size);
-            in.read(reinterpret_cast<char*>(pattern.required.data()), req_size * sizeof(size_t));
-            
-            in.read(reinterpret_cast<char*>(&dis_size), sizeof(dis_size));
-            pattern.disallowed.resize(dis_size);
-            in.read(reinterpret_cast<char*>(pattern.disallowed.data()), dis_size * sizeof(size_t));
-            
+            in.read(reinterpret_cast<char*>(&pattern.required), sizeof(__uint128_t));
+            in.read(reinterpret_cast<char*>(&pattern.disallowed), sizeof(__uint128_t));
             node->patterns[i] = pattern;
         }
     }
@@ -339,12 +333,6 @@ unique_ptr<BitFilterTree::TreeNode> BitFilterTree::LoadTreeBinaryRecursive(std::
 }
 
 bool BitFilterTree::ReadFiltersFromCsv(const string& filename) {
-    if (LoadFiltersFromCache()) {
-        cout << "Loaded filters from cache" << endl;
-        
-        return true;
-    }
-    
     std::ifstream file(filename);
     if (!file.is_open()) {
         cerr << "Failed to open file: " << filename << endl;
@@ -359,19 +347,30 @@ bool BitFilterTree::ReadFiltersFromCsv(const string& filename) {
         vector<size_t> row;
         
         try {
+            // Parse all numbers from the line
             while (std::getline(ss, value, ',')) {
+                // Convert string to size_t, handling whitespace
+                value.erase(remove_if(value.begin(), value.end(), ::isspace), value.end());
+                if (value.empty()) continue;
+                
                 size_t pos = std::stoul(value);
-                if (pos == 0) {
+                if (pos == 0) continue;
+                
+                // Adjust position to be 0-based
+                pos--;
+                if (pos >= BITS) {
+                    cerr << "Warning: Position " << (pos + 1) << " exceeds bit limit" << endl;
                     continue;
                 }
                 row.push_back(pos);
             }
-
             if (!row.empty()) {
-                FilterPattern pattern;
-                pattern.disallowed = {row.back()};  // Store last number in disallowed vector
-                row.pop_back();  // Remove disallowed from positions
-                pattern.required = row;  // Store remaining numbers as required
+                FilterPattern pattern{0, 0};  // Initialize both fields to 0
+                for (int i=0;i<row.size()-1;i++){
+                    SetBit(pattern.required, row[i]);
+                }
+
+                SetBit(pattern.disallowed, row[row.size()-1]);
                 patterns_.push_back(pattern);
             }
         
@@ -431,24 +430,18 @@ BitFilterTree::EntropyMetrics BitFilterTree::CalculateEntropy(size_t bit_positio
         bool satisfies_constraints = true;
         
         // Check required bits from constraints
-        for (size_t req : constraints.required) {
-            if (std::find(stored_pattern.required.begin(), stored_pattern.required.end(), req) == stored_pattern.required.end()) {
-                satisfies_constraints = false;
-                break;
-            }
+        if ((stored_pattern.required & constraints.required) != constraints.required) {
+            satisfies_constraints = false;
         }
         
         // Check disallowed bits from constraints
-        for (size_t dis : constraints.disallowed) {
-            if (std::find(stored_pattern.required.begin(), stored_pattern.required.end(), dis) != stored_pattern.required.end()) {
-                satisfies_constraints = false;
-                break;
-            }
+        if ((stored_pattern.required & constraints.disallowed) != 0) {
+            satisfies_constraints = false;
         }
 
         if (satisfies_constraints) {
             // Check if bit is set in this pattern
-            bool bit_is_set = std::find(stored_pattern.required.begin(), stored_pattern.required.end(), bit_position) != stored_pattern.required.end();
+            bool bit_is_set = IsBitSet(stored_pattern.required, bit_position);
             
             if (bit_is_set) {
                 matched++;
@@ -486,8 +479,8 @@ BitFilterTree::EntropyMetrics BitFilterTree::FindMaxEntropyBit(const FilterPatte
     #pragma omp parallel for
     for (size_t bit = 0; bit < BITS; bit++) {
         // Skip bits that are already in constraints
-        if (std::find(constraints.required.begin(), constraints.required.end(), bit) != constraints.required.end() ||
-            std::find(constraints.disallowed.begin(), constraints.disallowed.end(), bit) != constraints.disallowed.end()) {
+        if (IsBitSet(constraints.required, bit) ||
+            IsBitSet(constraints.disallowed, bit)) {
             continue;
         }
 
@@ -594,11 +587,11 @@ string BitFilterTree::CreateDotTreeHelper(const TreeNode* node) const {
     return ss.str();
 }
 
-bool BitFilterTree::ClassifyPattern(const vector<size_t>& set_bits, size_t max_bits) const {
+bool BitFilterTree::ClassifyPattern(__uint128_t set_bits, size_t max_bits) const {
     return ClassifyPatternHelper(set_bits, root_.get(), max_bits);
 }
 
-bool BitFilterTree::ClassifyPatternHelper(const vector<size_t>& set_bits, const TreeNode* node, size_t max_bits) const {
+bool BitFilterTree::ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* node, size_t max_bits) const {
     if (!node) {
         return false;
     }
@@ -606,34 +599,36 @@ bool BitFilterTree::ClassifyPatternHelper(const vector<size_t>& set_bits, const 
     // If we've reached a leaf node, check if any pattern matches our constraints
     if (node->is_leaf) {
         for (const auto& leaf_pattern : node->patterns) {
+            // Check required bits
+            // Print binary representation of required bits
             
-            bool required_pass = true;
-            for (const auto& req : leaf_pattern.required) {
-                if (std::find(set_bits.begin(), set_bits.end(), req) == set_bits.end()) { 
-                    // if the required for this leaf pattern is not in the query pattern
-                    required_pass = false;
-                    // cout<<"required not found "<<req<<endl;
-                    break;
-                }
+            for (int i = BITS - 1; i >= 0; i--) {
+                cout << static_cast<int>((leaf_pattern.required >> i) & 1);
+            }
+            cout << "  Required bits " <<endl;
+            
+            for (int i = BITS - 1; i >= 0; i--) {
+                cout << static_cast<int>((leaf_pattern.disallowed >> i) & 1);
+            }
+            cout << "  Disallowed bits: ";
+            cout << endl;
+
+            for (int i = BITS - 1; i >= 0; i--) {
+                cout << static_cast<int>((set_bits >> i) & 1);
+            }
+            cout << "  set bits: ";
+            cout << endl;
+            cout << endl;
+            if ((leaf_pattern.required & set_bits) == leaf_pattern.required) {
+                continue;
             }
 
-            bool disallowed_fail = false;
-            if (required_pass) {
-                
-                for (const auto& dis : leaf_pattern.disallowed) {
-                    if (dis > max_bits || std::find(set_bits.begin(), set_bits.end(), dis) != set_bits.end()) {
-                        disallowed_fail = true;
-                        break;
-                    }
-                }
+            // Check disallowed bits
+            if ((leaf_pattern.disallowed & set_bits) != 0) {
+                continue;
             }
-            // cout<<"disallowed_fail "<<disallowed_fail<<" required_pass "<<required_pass<<endl;
-            // cout<<"return "<<(required_pass == true && disallowed_fail == false)<<endl;
-            // cout<<"------"<<endl;
 
-            if (required_pass == true && disallowed_fail == false) {
-                return true;
-            }
+            return true;
         }
         return false;
     }
@@ -641,8 +636,8 @@ bool BitFilterTree::ClassifyPatternHelper(const vector<size_t>& set_bits, const 
     // For non-leaf nodes, check the current bit position
     size_t current_bit = node->metrics.bit_index;
   
-    // If the current bit is not in set_bits, follow the not_match path
-    if (std::find(set_bits.begin(), set_bits.end(), current_bit) == set_bits.end()) {
+    // If the current bit is not set in set_bits, follow the not_match path
+    if (!IsBitSet(set_bits, current_bit)) {
         return ClassifyPatternHelper(set_bits, node->not_match.get(), max_bits);
     }
     
@@ -673,61 +668,3 @@ bool BitFilterTree::LoadTreeBinary(const string& filename) {
     root_ = LoadTreeBinaryRecursive(in);
     return root_ != nullptr;
 }
-
-
-
-// int main() {
-//     BitFilterTree filter_tree;
-    
-//     cout << "Reading filters" << endl;
-//     if (!filter_tree.ReadFiltersFromCsv("diophantine_small.txt")) {
-//         cerr << "Failed to read filters" << endl;
-//         return 1;
-//     }
-
-//     cout << "Building Tree" <<endl;
-//     auto root = filter_tree.BuildTree(FilterPattern(), 0, 40, 1);
-    
-//     // Get and print tree statistics
-//     cout << "Analyzing Tree" <<endl;
-//     auto stats = filter_tree.AnalyzeTree(root.get());
-//     cout << "Tree Statistics:" << endl;
-//     cout << "Average comparisons per path: " << stats.avg_comparisons << endl;
-//     cout << "Total paths: " << stats.path_count << endl;
-//     cout << "Total comparisons: " << stats.comparison_count << endl;
-    
-//     // Create DOT file with statistics
-//     // auto dot_tree = filter_tree.CreateDotTree(root.get());
-//     // std::ofstream dot_file("tree.dot");
-//     // if (dot_file.is_open()) {
-//     //     dot_file << dot_tree;
-//     //     dot_file.close();
-//     // }
-
-//     cout << "Saving tree in binary format..." << endl;
-//     if (!filter_tree.SaveTreeBinary(root.get(), "tree.bin")) {
-//         cerr << "Failed to save tree in binary format" << endl;
-//         return 1;
-//     }
-//     cout << "Tree saved successfully to tree.bin" << endl;
-
-//     // To load the tree later:
-//     cout << "Loading tree from binary file..." << endl;
-//     auto loaded_root = filter_tree.LoadTreeBinary("tree.bin");
-//     if (!loaded_root) {
-//         cerr << "Failed to load tree from binary file" << endl;
-//         return 1;
-//     }
-//     cout << "Tree loaded successfully" << endl;
-
-//     FilterPattern pattern;
-//     pattern.required = {3, 4};    // bits that must be 1
-//     pattern.disallowed = {12};       // bits that must be 0
-//     cout<<filter_tree.ClassifyPattern(pattern, root.get())<<endl;
-
-//     FilterPattern pattern1;
-//     pattern1.required = {6,8,10};    // bits that must be 1
-//     pattern1.disallowed = {12};       // bits that must be 0
-//     cout<<filter_tree.ClassifyPattern(pattern1, root.get())<<endl;
-//     return 0;
-// }

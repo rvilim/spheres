@@ -4,12 +4,13 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <iostream>
 
-const size_t BITS = 70;
+const size_t BITS = 128;
 
 struct FilterPattern {
-    std::vector<size_t> required;     // bits that must be 1
-    std::vector<size_t> disallowed;   // bits that must be 0
+    __uint128_t required;     // bits that must be 1
+    __uint128_t disallowed;   // bits that must be 0
 };
 
 class BitFilterTree {
@@ -48,7 +49,7 @@ public:
                   size_t min_patterns_leaf = 1);
     void PrintTree() const;
     std::string CreateDotTree() const;
-    bool ClassifyPattern(const std::vector<size_t>& set_bits, size_t max_bits) const;
+    bool ClassifyPattern(__uint128_t set_bits, size_t max_bits) const;
     TreeMetrics AnalyzeTree() const;
     bool SaveTreeBinary(const std::string& filename) const;
     bool LoadTreeBinary(const std::string& filename);
@@ -58,13 +59,32 @@ private:
     std::vector<FilterPattern> patterns_;
     std::unique_ptr<TreeNode> root_;
     
+    static inline void PrintBits(__uint128_t value) {
+        // Split the 128-bit value into two 64-bit parts
+        uint64_t lower = static_cast<uint64_t>(value);         // Lower 64 bits
+        uint64_t upper = static_cast<uint64_t>(value >> 64);   // Upper 64 bits
+
+        // Print the upper and lower parts in binary
+        std::cout << std::bitset<64>(upper) << std::bitset<64>(lower) << std::endl;
+    }
     // Helper functions for bit operations
     static inline bool IsBitSet(__uint128_t value, size_t bit) {
         return (value & ((__uint128_t)1 << bit)) != 0;
     }
 
     static inline void SetBit(__uint128_t& value, size_t bit) {
-        value |= ((__uint128_t)1 << bit);
+        // Check if bit position is valid (0-127)
+        if (bit > 127) {
+            return;
+        }
+
+        // Create a mask with 1 at the desired position
+        // __uint128_t mask = (__uint128_t)1 << bit;
+
+        // Set the bit using OR operation
+        // value |= mask;
+        value |= (__uint128_t(1) << bit);
+
     }
     
     // Private helper methods
@@ -88,7 +108,7 @@ private:
                                        size_t min_patterns_leaf);
     void PrintTreeHelper(const TreeNode* node, int depth) const;
     std::string CreateDotTreeHelper(const TreeNode* node) const;
-    bool ClassifyPatternHelper(const std::vector<size_t>& set_bits, const TreeNode* node, size_t max_bits) const;
+    bool ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* node, size_t max_bits) const;
     TreeMetrics CalculateTreeStats(const TreeNode* node, size_t depth = 0) const;
     void SaveTreeBinaryRecursive(std::ofstream& out, const TreeNode* node) const;
     std::unique_ptr<TreeNode> LoadTreeBinaryRecursive(std::ifstream& in) const;
