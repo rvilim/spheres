@@ -10,7 +10,15 @@
 
 using namespace std;
 
-
+BitFilterTree::BitFilterTree(size_t max_bits) : BITS(max_bits) {
+    // Initialize root_ as nullptr
+    root_ = nullptr;
+    // Create mask with 1s for all bits above max_bits
+    high_bit_mask = 0;
+    for (size_t i = max_bits; i < 128; i++) {
+        SetBit(high_bit_mask, i);
+    }
+}
 
 bool BitFilterTree::SaveFiltersToCache() {
     std::ofstream cache(kCachePath, std::ios::binary);
@@ -198,19 +206,6 @@ unique_ptr<BitFilterTree::TreeNode> BitFilterTree::BuildTree(
         node->is_leaf = true;
         node->patterns = current_patterns;
 
-        for (const auto& pattern : current_patterns) {
-            PrintBits(pattern.required);
-            PrintBits(pattern.disallowed);
-            cout<<endl;
-        }
-
-        // cout << "Leaf node patterns:" << endl;
-        // for (const auto& pattern : current_patterns) {
-        //     cout << "  Required:   " << std::bitset<128>(pattern.required) << endl;
-        //     cout << "  Disallowed: " << std::bitset<128>(pattern.disallowed) << endl;
-        //     cout << endl;
-        // }
-        
         // Update total and print progress
         total_leaf_patterns += current_patterns.size();
         if (total_leaf_patterns / PROGRESS_INTERVAL > (total_leaf_patterns - current_patterns.size()) / PROGRESS_INTERVAL) {
@@ -587,11 +582,11 @@ string BitFilterTree::CreateDotTreeHelper(const TreeNode* node) const {
     return ss.str();
 }
 
-bool BitFilterTree::ClassifyPattern(__uint128_t set_bits, size_t max_bits) const {
-    return ClassifyPatternHelper(set_bits, root_.get(), max_bits);
+bool BitFilterTree::ClassifyPattern(__uint128_t set_bits) const {
+    return ClassifyPatternHelper(set_bits, root_.get());
 }
 
-bool BitFilterTree::ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* node, size_t max_bits) const {
+bool BitFilterTree::ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* node) const {
     if (!node) {
         return false;
     }
@@ -599,36 +594,20 @@ bool BitFilterTree::ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* 
     // If we've reached a leaf node, check if any pattern matches our constraints
     if (node->is_leaf) {
         for (const auto& leaf_pattern : node->patterns) {
-            // Check required bits
-            // Print binary representation of required bits
-            
-            for (int i = BITS - 1; i >= 0; i--) {
-                cout << static_cast<int>((leaf_pattern.required >> i) & 1);
-            }
-            cout << "  Required bits " <<endl;
-            
-            for (int i = BITS - 1; i >= 0; i--) {
-                cout << static_cast<int>((leaf_pattern.disallowed >> i) & 1);
-            }
-            cout << "  Disallowed bits: ";
-            cout << endl;
+            auto required_set =  (leaf_pattern.required & set_bits) == leaf_pattern.required;
+            auto disallowed_unset = (leaf_pattern.disallowed & set_bits) == 0;
 
-            for (int i = BITS - 1; i >= 0; i--) {
-                cout << static_cast<int>((set_bits >> i) & 1);
-            }
-            cout << "  set bits: ";
-            cout << endl;
-            cout << endl;
-            if ((leaf_pattern.required & set_bits) == leaf_pattern.required) {
-                continue;
-            }
+            // If this pattern requires that we don't set a bit higher than max_bits, then we did not match the pattern
+            auto max_exceeded = (high_bit_mask & leaf_pattern.disallowed) != 0;
 
-            // Check disallowed bits
-            if ((leaf_pattern.disallowed & set_bits) != 0) {
-                continue;
+            if ( required_set && disallowed_unset && (!max_exceeded)){
+                cout<<"---"<<endl;
+                PrintBits(leaf_pattern.required);
+                PrintBits(leaf_pattern.disallowed);
+                PrintBits(set_bits);
+                cout<<"---"<<endl;
+                return true;
             }
-
-            return true;
         }
         return false;
     }
@@ -638,11 +617,11 @@ bool BitFilterTree::ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* 
   
     // If the current bit is not set in set_bits, follow the not_match path
     if (!IsBitSet(set_bits, current_bit)) {
-        return ClassifyPatternHelper(set_bits, node->not_match.get(), max_bits);
+        return ClassifyPatternHelper(set_bits, node->not_match.get());
     }
     
-    return ClassifyPatternHelper(set_bits, node->match.get(), max_bits) || 
-           ClassifyPatternHelper(set_bits, node->not_match.get(), max_bits);
+    return ClassifyPatternHelper(set_bits, node->match.get()) || 
+           ClassifyPatternHelper(set_bits, node->not_match.get());
 }
 
 BitFilterTree::TreeMetrics BitFilterTree::AnalyzeTree() const {

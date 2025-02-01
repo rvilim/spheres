@@ -6,15 +6,16 @@
 #include <string>
 #include <iostream>
 
-const size_t BITS = 128;
-
 struct FilterPattern {
-    __uint128_t required;     // bits that must be 1
-    __uint128_t disallowed;   // bits that must be 0
+    __uint128_t required = 0;  // Bits that must be 1
+    __uint128_t disallowed = 0; // Bits that must be 0
 };
+
 
 class BitFilterTree {
 public:
+    explicit BitFilterTree(size_t max_bits);
+
     struct EntropyMetrics {
         double entropy;
         double probability;
@@ -49,15 +50,21 @@ public:
                   size_t min_patterns_leaf = 1);
     void PrintTree() const;
     std::string CreateDotTree() const;
-    bool ClassifyPattern(__uint128_t set_bits, size_t max_bits) const;
+    bool ClassifyPattern(__uint128_t set_bits) const;
     TreeMetrics AnalyzeTree() const;
     bool SaveTreeBinary(const std::string& filename) const;
     bool LoadTreeBinary(const std::string& filename);
 
 private:
     static constexpr const char* kCachePath = "diophantine.cache";
+    const size_t BITS;
     std::vector<FilterPattern> patterns_;
     std::unique_ptr<TreeNode> root_;
+
+    // high_bit_mask is a way to ignore patterns that involve bits higher than
+    // exist in the pile we are considering. If disallowed & high_bit_mask!=0 then we 
+    // ignore this pattern
+    __uint128_t high_bit_mask;  
     
     static inline void PrintBits(__uint128_t value) {
         // Split the 128-bit value into two 64-bit parts
@@ -108,7 +115,7 @@ private:
                                        size_t min_patterns_leaf);
     void PrintTreeHelper(const TreeNode* node, int depth) const;
     std::string CreateDotTreeHelper(const TreeNode* node) const;
-    bool ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* node, size_t max_bits) const;
+    bool ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* node) const;
     TreeMetrics CalculateTreeStats(const TreeNode* node, size_t depth = 0) const;
     void SaveTreeBinaryRecursive(std::ofstream& out, const TreeNode* node) const;
     std::unique_ptr<TreeNode> LoadTreeBinaryRecursive(std::ifstream& in) const;
