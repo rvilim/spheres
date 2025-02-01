@@ -587,36 +587,30 @@ bool BitFilterTree::ClassifyPattern(__uint128_t set_bits) const {
 }
 
 bool BitFilterTree::ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* node) const {
-    if (!node) {
-        return false;
-    }
+    // if (!node) {
+    //     return false;
+    // }
 
     // If we've reached a leaf node, check if any pattern matches our constraints
     if (node->is_leaf) {
         for (const auto& leaf_pattern : node->patterns) {
-            auto required_set =  (leaf_pattern.required & set_bits) == leaf_pattern.required;
-            auto disallowed_unset = (leaf_pattern.disallowed & set_bits) == 0;
 
-            // If this pattern requires that we don't set a bit higher than max_bits, then we did not match the pattern
-            auto max_exceeded = (high_bit_mask & leaf_pattern.disallowed) != 0;
+            // If all the bits that are required by this pattern are set
+            const bool required_set =  (leaf_pattern.required & set_bits) == leaf_pattern.required;
 
-            if ( required_set && disallowed_unset && (!max_exceeded)){
-                cout<<"---"<<endl;
-                PrintBits(leaf_pattern.required);
-                PrintBits(leaf_pattern.disallowed);
-                PrintBits(set_bits);
-                cout<<"---"<<endl;
+            // Here we fold our high bit mask into set bits when checking against disallowed
+            const bool disallowed_unset = (leaf_pattern.disallowed & (set_bits | high_bit_mask)) == 0;
+
+            if ( required_set && disallowed_unset){
                 return true;
             }
         }
         return false;
     }
 
-    // For non-leaf nodes, check the current bit position
-    size_t current_bit = node->metrics.bit_index;
-  
-    // If the current bit is not set in set_bits, follow the not_match path
-    if (!IsBitSet(set_bits, current_bit)) {
+    // If the current bit is not set in set_bits or the current bit exceeds our possible bit size for this input
+    // then we don't want to check the match path
+    if (!IsBitSet(set_bits, node->metrics.bit_index)) {
         return ClassifyPatternHelper(set_bits, node->not_match.get());
     }
     
