@@ -195,23 +195,23 @@ def main():
     for pile_num, solutions in nums.items():
         print(f"{pile_num}\t{solutions}")
 
-def test_diophantine():
-    # diophantine = read_diophantine()
+# def test_diophantine():
+#     # diophantine = read_diophantine()
 
-    # 6^3+8^3+10^3 are all set and 12^3 is not set, and we could have set 12
-    piles = [[0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
-    disallowed = 0
+#     # 6^3+8^3+10^3 are all set and 12^3 is not set, and we could have set 12
+#     piles = [[0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+#     disallowed = 0
 
-    # 6^3+8^3+10^3 are all set and 12^3 is not set, and but we could not have set 12
-    piles = [[0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
-    disallowed = 1<<11
-    assert len(filter_diophantine(piles, disallowed, diophantine))==1
+#     # 6^3+8^3+10^3 are all set and 12^3 is not set, and but we could not have set 12
+#     piles = [[0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+#     disallowed = 1<<11
+#     assert len(filter_diophantine(piles, disallowed, diophantine))==1
 
-    # 8^3+10^3 are all set and 12^3 is not set, and we could have set 12 e.g. this filter just misses
-    piles = [[0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
-    disallowed = 0
-    assert len(filter_diophantine(piles, disallowed, diophantine))==1
+#     # 8^3+10^3 are all set and 12^3 is not set, and we could have set 12 e.g. this filter just misses
+#     piles = [[0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+#     disallowed = 0
+#     assert len(filter_diophantine(piles, disallowed, diophantine))==1
 
-if __name__=="__main__":
-    main()
-    # test_diophantine()
+# if __name__=="__main__":
+#     main()
+#     # test_diophantine()

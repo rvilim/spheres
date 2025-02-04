@@ -5,16 +5,18 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <bitset>
+
 
 struct FilterPattern {
     __uint128_t required = 0;  // Bits that must be 1
     __uint128_t disallowed = 0; // Bits that must be 0
 };
 
-
 class BitFilterTree {
 public:
     explicit BitFilterTree(size_t max_bits);
+
 
     struct EntropyMetrics {
         double entropy;
@@ -39,7 +41,8 @@ public:
     };
 
     // Public methods
-    bool ReadFiltersFromCsv(const std::string& filename);
+    bool ReadFiltersFromCsv(const std::string& filename, const std::string& cache_path);
+    void BuildTreeFile(const std::string& tree_path, int max_depth, int min_patterns_leaf);
     const std::vector<FilterPattern>& GetPatterns() const;
     std::vector<FilterPattern> GeneratePatterns(const std::vector<size_t>& initial_required,
                                                const std::vector<size_t>& initial_disallowed);
@@ -54,9 +57,10 @@ public:
     TreeMetrics AnalyzeTree() const;
     bool SaveTreeBinary(const std::string& filename) const;
     bool LoadTreeBinary(const std::string& filename);
+    bool SaveFiltersToCache(const std::string& cache_path);
+    bool LoadFiltersFromCache(const std::string& cache_path);
 
 private:
-    static constexpr const char* kCachePath = "diophantine.cache";
     const size_t BITS;
     std::vector<FilterPattern> patterns_;
     std::unique_ptr<TreeNode> root_;
@@ -74,29 +78,19 @@ private:
         // Print the upper and lower parts in binary
         std::cout << std::bitset<64>(upper) << std::bitset<64>(lower) << std::endl;
     }
+
     // Helper functions for bit operations
     static inline bool IsBitSet(__uint128_t value, size_t bit) {
         return (value & ((__uint128_t)1 << bit)) != 0;
     }
 
     static inline void SetBit(__uint128_t& value, size_t bit) {
-        // Check if bit position is valid (0-127)
-        if (bit > 127) {
-            return;
+        if (bit < 128) {
+            value |= (__uint128_t(1) << bit);
         }
-
-        // Create a mask with 1 at the desired position
-        // __uint128_t mask = (__uint128_t)1 << bit;
-
-        // Set the bit using OR operation
-        // value |= mask;
-        value |= (__uint128_t(1) << bit);
-
     }
     
     // Private helper methods
-    bool SaveFiltersToCache();
-    bool LoadFiltersFromCache();
     void GeneratePatternsRecursive(std::vector<FilterPattern>& patterns,
                                   const std::vector<size_t>& current_required,
                                   const std::vector<size_t>& current_disallowed,

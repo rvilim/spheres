@@ -8,6 +8,11 @@
 #include <omp.h>
 #include <functional>
 
+#ifdef WITH_PYTHON
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#endif
+
 using namespace std;
 
 BitFilterTree::BitFilterTree(size_t max_bits) : BITS(max_bits) {
@@ -20,8 +25,8 @@ BitFilterTree::BitFilterTree(size_t max_bits) : BITS(max_bits) {
     }
 }
 
-bool BitFilterTree::SaveFiltersToCache() {
-    std::ofstream cache(kCachePath, std::ios::binary);
+bool BitFilterTree::SaveFiltersToCache(const std::string& cache_path) {
+    std::ofstream cache(cache_path, std::ios::binary);
     if (!cache.is_open()) {
         return false;
     }
@@ -37,8 +42,8 @@ bool BitFilterTree::SaveFiltersToCache() {
     return true;
 }
 
-bool BitFilterTree::LoadFiltersFromCache() {
-    std::ifstream cache(kCachePath, std::ios::binary);
+bool BitFilterTree::LoadFiltersFromCache(const std::string& cache_path) {
+    std::ifstream cache(cache_path, std::ios::binary);
     if (!cache.is_open()) {
         return false;
     }
@@ -53,8 +58,23 @@ bool BitFilterTree::LoadFiltersFromCache() {
         FilterPattern pattern;
         cache.read(reinterpret_cast<char*>(&pattern.required), sizeof(__uint128_t));
         cache.read(reinterpret_cast<char*>(&pattern.disallowed), sizeof(__uint128_t));
-        patterns_.push_back(pattern);
+        
+        // Find largest disallowed bit by searching from highest to lowest
+        size_t largest_bit = 0;
+        for (size_t bit = 127; bit != SIZE_MAX; bit--) {  // Using SIZE_MAX to handle unsigned underflow
+            if (IsBitSet(pattern.disallowed, bit)) {
+                largest_bit = bit;
+                break;  // We found the highest bit, no need to continue
+            }
+        }
+        
+        if (largest_bit <= BITS-1) {
+            patterns_.push_back(pattern);
+        }
     }
+
+    cout<<"Patterns before filtering: " <<num_patterns<<endl;
+    cout<<"Patterns after filtering: " <<patterns_.size()<<endl;
     
     return true;
 }
@@ -183,6 +203,28 @@ BitFilterTree::EntropyMetrics BitFilterTree::FindMaxEntropyBit(
     return max_result;
 }
 
+
+void BitFilterTree::BuildTreeFile(const string& tree_path, int max_depth, int min_patterns_leaf) {
+
+    // BuildTree returns bool, not a unique_ptr
+    if (!BuildTree(FilterPattern(), max_depth, min_patterns_leaf)) {
+        cerr << "Failed to build tree" << endl;
+        return;
+    }
+    
+    // Save the tree
+    cout << "Saving tree to tree.bin" << endl;
+    if (!SaveTreeBinary(tree_path)) {
+        cerr << "Failed to save tree" << endl;
+    }
+    auto dot_tree = CreateDotTree();
+    std::ofstream dot_file("tree.dot");
+    if (dot_file.is_open()) {
+        dot_file << dot_tree;
+        dot_file.close();
+    }
+}
+
 // Modify build_tree to pass filtered patterns
 unique_ptr<BitFilterTree::TreeNode> BitFilterTree::BuildTree(
     const FilterPattern& constraints,
@@ -196,40 +238,57 @@ unique_ptr<BitFilterTree::TreeNode> BitFilterTree::BuildTree(
     
     auto node = make_unique<TreeNode>();
     
-    if (depth >= max_depth || current_patterns.empty() || 
+    // Early exit conditions
+    if (current_patterns.empty()) {
+        return nullptr;  // Don't create a node if there are no patterns
+    }
+    
+    if (depth >= max_depth || 
         current_patterns.size() <= min_patterns_leaf || 
         std::all_of(current_patterns.begin() + 1, current_patterns.end(),
             [&](const FilterPattern& p) {
                 return p.required == current_patterns[0].required &&
-                        p.disallowed == current_patterns[0].disallowed;
+                       p.disallowed == current_patterns[0].disallowed;
             })) {
         node->is_leaf = true;
         node->patterns = current_patterns;
 
-        // Update total and print progress
         total_leaf_patterns += current_patterns.size();
         if (total_leaf_patterns / PROGRESS_INTERVAL > (total_leaf_patterns - current_patterns.size()) / PROGRESS_INTERVAL) {
             cout << "Processed " << total_leaf_patterns << "/" << patterns_.size() 
                  << " patterns in leaf nodes..." << endl;
         }
-      
         return node;
     }
 
     node->metrics = FindMaxEntropyBit(constraints, current_patterns);
-
-    // Create constraints and filter patterns for not matching case
+    
+    // Create constraints and filter patterns for both cases
     FilterPattern not_match_constraints = constraints;
     SetBit(not_match_constraints.disallowed, node->metrics.bit_index);
     auto not_match_patterns = FilterMatchingPatterns(current_patterns, not_match_constraints);
-    node->not_match = BuildTree(not_match_constraints, not_match_patterns, depth + 1, max_depth, min_patterns_leaf);
 
-    // Create constraints and filter patterns for matching case
     FilterPattern match_constraints = constraints;
     SetBit(match_constraints.required, node->metrics.bit_index);
     auto match_patterns = FilterMatchingPatterns(current_patterns, match_constraints);
 
-    node->match = BuildTree(match_constraints, match_patterns, depth + 1, max_depth, min_patterns_leaf);
+    // Only create branches if they have patterns
+    if (!not_match_patterns.empty()) {
+        node->not_match = BuildTree(not_match_constraints, not_match_patterns, 
+                                  depth + 1, max_depth, min_patterns_leaf);
+    }
+
+    if (!match_patterns.empty()) {
+        node->match = BuildTree(match_constraints, match_patterns, 
+                              depth + 1, max_depth, min_patterns_leaf);
+    }
+
+    // If neither branch was created, convert to leaf node
+    if (!node->not_match && !node->match) {
+        node->is_leaf = true;
+        node->patterns = current_patterns;
+        return node;
+    }
 
     return node;
 }
@@ -327,7 +386,7 @@ unique_ptr<BitFilterTree::TreeNode> BitFilterTree::LoadTreeBinaryRecursive(std::
     return node;
 }
 
-bool BitFilterTree::ReadFiltersFromCsv(const string& filename) {
+bool BitFilterTree::ReadFiltersFromCsv(const string& filename, const string& cache_path) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         cerr << "Failed to open file: " << filename << endl;
@@ -353,10 +412,6 @@ bool BitFilterTree::ReadFiltersFromCsv(const string& filename) {
                 
                 // Adjust position to be 0-based
                 pos--;
-                if (pos >= BITS) {
-                    cerr << "Warning: Position " << (pos + 1) << " exceeds bit limit" << endl;
-                    continue;
-                }
                 row.push_back(pos);
             }
             if (!row.empty()) {
@@ -376,13 +431,13 @@ bool BitFilterTree::ReadFiltersFromCsv(const string& filename) {
     }
     
     if (!patterns_.empty()) {
-        if (SaveFiltersToCache()) {
-            cout << "Saved filters to cache" << endl;
+        if (SaveFiltersToCache(cache_path)) {
+            cout << "Saved filters to cache: " << cache_path << endl;
         } else {
-            cerr << "Failed to save cache file" << endl;
+            cerr << "Failed to save cache file: " << cache_path << endl;
         }
     }
-    
+
     return !patterns_.empty();
 }
 
@@ -641,3 +696,63 @@ bool BitFilterTree::LoadTreeBinary(const string& filename) {
     root_ = LoadTreeBinaryRecursive(in);
     return root_ != nullptr;
 }
+
+
+
+#ifdef WITH_PYTHON
+namespace py = pybind11;
+
+PYBIND11_MODULE(bitfiltertree, m) {
+    py::class_<BitFilterTree>(m, "BitFilterTree")
+        .def(py::init<int>())
+        .def("build_tree_file", &BitFilterTree::BuildTreeFile,
+             py::arg("tree_path") = "tree.bin",
+             py::arg("max_depth") = 40,
+             py::arg("min_patterns_leaf") = 10,
+             "Build and save a decision tree to a file")
+        .def("read_filters_from_csv", &BitFilterTree::ReadFiltersFromCsv,
+             py::arg("filename"),
+             py::arg("cache_path"),
+             "Read filter patterns from a CSV file")
+        .def("load_filters_from_cache", &BitFilterTree::LoadFiltersFromCache,
+             py::arg("cache_path"),
+             "Load filter patterns from the specified cache file")
+        .def("save_tree_binary", &BitFilterTree::SaveTreeBinary,
+             py::arg("filename"),
+             "Save the decision tree to a binary file")
+        .def("load_tree_binary", &BitFilterTree::LoadTreeBinary,
+             py::arg("filename"),
+             "Load a decision tree from a binary file")
+        .def("analyze_tree", &BitFilterTree::AnalyzeTree,
+             "Analyze the tree and return metrics about its structure")
+        .def("print_tree", &BitFilterTree::PrintTree,
+             "Print a text representation of the tree")
+        .def("classify_pattern", &BitFilterTree::ClassifyPattern,
+             py::arg("set_bits"),
+             "Classify a bit pattern using the decision tree");
+
+    // Define the TreeMetrics struct for Python
+    py::class_<BitFilterTree::TreeMetrics>(m, "TreeMetrics")
+        .def_readonly("avg_comparisons", &BitFilterTree::TreeMetrics::avg_comparisons)
+        .def_readonly("path_count", &BitFilterTree::TreeMetrics::path_count)
+        .def_readonly("comparison_count", &BitFilterTree::TreeMetrics::comparison_count);
+
+    m.doc() = R"pbdoc(
+        BitFilterTree Module
+        -------------------
+
+        A module for building and using decision trees for bit pattern classification.
+
+        Key Functions:
+        - build_tree_file: Build and save a decision tree
+        - read_filters_from_csv: Load patterns from CSV
+        - classify_pattern: Classify new patterns using the tree
+    )pbdoc";
+
+#ifdef VERSION_INFO
+    m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
+#else
+    m.attr("__version__") = "dev";
+#endif
+}
+#endif

@@ -13,29 +13,36 @@
 #include <pybind11/stl.h>
 #endif
 
-// auto n_cubes=23;
-// auto n_piles=3;
 using namespace std;
 
-// const int sums[100] = {1, 9, 36, 100, 225, 441, 784, 1296, 2025, 3025, 4356, 6084, 8281, 11025, 14400, 18496, 23409, 29241, 36100, 44100, 53361, 64009, 76176, 90000, 105625, 123201, 142884, 164836, 189225, 216225, 246016, 278784, 314721, 354025, 396900, 443556, 494209, 549081, 608400, 672400, 741321, 815409, 894916, 980100, 1071225, 1168561, 1272384, 1382976, 1500625, 1625625, 1758276, 1898884, 2047761, 2205225, 2371600, 2547216, 2732409, 2927521, 3132900, 3348900, 3575881, 3814209, 4064256, 4326400, 4601025, 4888521, 5189284, 5503716, 5832225, 6175225, 6533136, 6906384, 7295401, 7700625, 8122500, 8561476, 9018009, 9492561, 9985600, 10497600, 11029041, 11580409, 12152196, 12744900, 13359025, 13995081, 14653584, 15335056, 16040025, 16769025, 17522596, 18301284, 19105641, 19936225, 20793600, 21678336, 22591009, 23532201, 24502500, 25502500};
-// const int cubes[100] = {1, 8, 27, 64, 125, 216, 343, 512, 729, 1000, 1331, 1728, 2197, 2744, 3375, 4096, 4913, 5832, 6859, 8000, 9261, 10648, 12167, 13824, 15625, 17576, 19683, 21952, 24389, 27000, 29791, 32768, 35937, 39304, 42875, 46656, 50653, 54872, 59319, 64000, 68921, 74088, 79507, 85184, 91125, 97336, 103823, 110592, 117649, 125000, 132651, 140608, 148877, 157464, 166375, 175616, 185193, 195112, 205379, 216000, 226981, 238328, 250047, 262144, 274625, 287496, 300763, 314432, 328509, 343000, 357911, 373248, 389017, 405224, 421875, 438976, 456533, 474552, 493039, 512000, 531441, 551368, 571787, 592704, 614125, 636056, 658503, 681472, 704969, 729000, 753571, 778688, 804357, 830584, 857375, 884736, 912673, 941192, 970299, 1000000};
-
-PileSolver::PileSolver() : sums(make_sums()), cubes(make_cubes()) {
-    // initialize_memoization();
-    // Initialize and load the bit filter tree
+PileSolver::PileSolver(int num_piles, 
+                       int num_cubes, 
+                       bool do_memoize,
+                       bool do_diophantine,
+                       const std::string& tree_path, 
+                       int memoization_limit) 
+    : memoization_limit(memoization_limit),
+      sums(make_sums()),
+      cubes(make_cubes()),
+      enable_memoize(do_memoize),
+      enable_diophantine(do_diophantine),
+      n_cubes(num_cubes),
+      n_piles(num_piles) {
     auto start = std::chrono::high_resolution_clock::now();
     
-    filter_tree = std::make_unique<BitFilterTree>();
-    auto loaded_tree = filter_tree->LoadTreeBinary("tree.bin");
-    if (!loaded_tree) {
-        std::cerr << "Failed to load bit filter tree from tree.bin" << std::endl;
-    } else {
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        std::cout << "Successfully loaded bit filter tree in " << duration.count() << " ms" << std::endl;
+    if (enable_diophantine) {
+        filter_tree = std::make_unique<BitFilterTree>(num_cubes);
+        auto loaded_tree = filter_tree->LoadTreeBinary(tree_path);
+        if (!loaded_tree) {
+            std::cerr << "Failed to load bit filter tree from " << tree_path << std::endl;
+        } else {
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            std::cout << "Successfully loaded bit filter tree in " << duration.count() << " ms" << std::endl;
+        }
     }
 
-
+    if (enable_memoize) initialize_memoization();
 }
 
 constexpr std::array<int, 100> PileSolver::make_sums() {
@@ -57,10 +64,10 @@ constexpr std::array<int, 100> PileSolver::make_cubes() {
 void PileSolver::initialize_memoization() {
     auto start = std::chrono::high_resolution_clock::now();
     // Try all possible combinations of the first MEMOIZATION_LIMIT bits
-    for (__int128 bits = 0; bits < (1 << MEMOIZATION_LIMIT); bits++) {
+    for (__int128 bits = 0; bits < (1 << memoization_limit); bits++) {
         int sum = 0;
         // Calculate sum for this combination
-        for (int pos = 0; pos < MEMOIZATION_LIMIT; pos++) {
+        for (int pos = 0; pos < memoization_limit; pos++) {
             if (bits & ((__int128)1 << pos)) {
                 sum += cubes[pos];
             }
@@ -74,7 +81,7 @@ void PileSolver::initialize_memoization() {
 
 int PileSolver::sum_pile(vector<int> pile) {
     int s=0;
-    for(int pos=0; pos<pile.size(); pos++){
+    for(int pos=0; pos<n_cubes; pos++){
         s+=pile[pos]*cubes[pos];
     }
     return s;
@@ -103,29 +110,38 @@ bool PileSolver::classify_pattern(const vector<int>& pile) const {
     
     // Convert pile vector to __uint128_t
     __uint128_t set_bits = 0;
-    for (size_t i = 0; i < pile.size(); i++) {
+    for (size_t i = 0; i < n_cubes; i++) {
         if (pile[i] == 1) {
             set_bits |= ((__uint128_t)1 << i);
         }
     }
-    return filter_tree->ClassifyPattern(set_bits, pile.size());
+    return filter_tree->ClassifyPattern(set_bits);
 }
 
 vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
                                           vector<int> &pile, __int128 disallowed) {
     vector<vector<int>> solutions;
+    // std::cout<<target<<" "<<pos<<std::endl;
+    // std::cout << "p: ";
+    // for (size_t i = 0; i < pile.size(); i++) {
+    //     std::cout << pile[i];
+    // }
+    // std::cout<<std::endl;
+    // auto bitstr = std::bitset<128>(disallowed).to_string().substr(128 - n_cubes);
+    // std::reverse(bitstr.begin(), bitstr.end());
+    // std::cout << "d: " << bitstr << std::endl;
+    // std::cout << std::endl;
 
-    if ((pos < MEMOIZATION_LIMIT) && pile.size()>=MEMOIZATION_LIMIT) {
+    if (enable_memoize && (pos == memoization_limit - 1) && n_cubes>=memoization_limit) {
         auto valid_patterns = find_valid_patterns(target, disallowed);        
         
         for (const auto& bits : valid_patterns) {
             vector<int> new_solution = pile;
-            for (int i = 0; i <= pos; i++) {
+            for (int i = 0; i < memoization_limit; i++) {
                 new_solution[i] = (bits & ((__int128)1 << i)) ? 1 : 0;
             }
             
-            // Convert pile directly to __uint128_t for classification
-            if (!filter_tree || !classify_pattern(new_solution)) {
+            if (!enable_diophantine || (enable_diophantine && !classify_pattern(new_solution))) {
                 solutions.push_back(new_solution);
             }
         }
@@ -144,7 +160,7 @@ vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
 
     if (cubes[pos] == target) {
         pile[pos] = true;
-        if (!filter_tree || !classify_pattern(pile)) {
+        if (!enable_diophantine || (enable_diophantine && !classify_pattern(pile))) {
             solutions.push_back(pile);
         }
         pile[pos] = false;
@@ -167,10 +183,11 @@ vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
     return solutions;
 }
 
-vector<vector<int>> PileSolver::init_distribution(int n_piles, int n_cubes) {
+vector<vector<int>> PileSolver::init_distribution() {
+    vector<vector<int>> piles(n_piles, vector<int>(n_cubes, false));
+
     int target = sums[n_cubes-1]/n_piles;
 
-    vector<vector<int>> piles(n_piles, vector<int>(n_cubes, false));
     piles[0][n_cubes-1]=true;
 
     for (int pile_num=1; pile_num<n_piles; pile_num++){
@@ -187,9 +204,8 @@ vector<vector<int>> PileSolver::init_distribution(int n_piles, int n_cubes) {
     return piles;
 }
 
-vector<int> PileSolver::init_remaining(vector<vector<int>> piles, int n_piles) {
+vector<int> PileSolver::init_remaining(vector<vector<int>> piles) {
     vector<int> remaining={};
-    auto n_cubes = piles[0].size();
     for(auto & pile : piles){
         remaining.emplace_back(sums[n_cubes - 1] / n_piles - sum_pile(pile));
     }
@@ -198,10 +214,10 @@ vector<int> PileSolver::init_remaining(vector<vector<int>> piles, int n_piles) {
 }
 
 int PileSolver::init_pos(vector<vector<int>> piles) {
-    for (int i=piles.size()-1; i>=0;i--){
+    for (int i=n_piles-1; i>=0;i--){
         auto pile = piles[i];
 
-        for(int j=0; j<pile.size(); j++){
+        for(int j=0; j<n_cubes; j++){
             if (pile[j]){
                 return j-1;
             }
@@ -211,7 +227,8 @@ int PileSolver::init_pos(vector<vector<int>> piles) {
     return -1;
 }
 
-int PileSolver::calc_remaining(__int128 disallowed, int n_cubes) {
+
+int PileSolver::calc_remaining(__int128 disallowed) {
     int remaining = sums[n_cubes-1];
 
     for (int pos = 0; pos < n_cubes; pos++) {
@@ -222,39 +239,47 @@ int PileSolver::calc_remaining(__int128 disallowed, int n_cubes) {
     return remaining;
 }
 
-void PileSolver::build_diophantine_tree(const string& csv_path, const string& tree_path, int max_depth) {
-    cout << "Reading filters from " << csv_path << endl;
-    if (!filter_tree->ReadFiltersFromCsv(csv_path)) {
-        cerr << "Failed to read filters" << endl;
-        return;
-    }
+// void PileSolver::build_diophantine_tree(const string& csv_path, const string& tree_path, int max_depth, int min_patterns_leaf) {
+//     cout << "Reading filters from " << csv_path << endl;
+//     // Create a default cache path based on the csv path
+//     string cache_path = csv_path + ".cache";
+//     if (!filter_tree->ReadFiltersFromCsv(csv_path, cache_path)) {
+//         cerr << "Failed to read filters" << endl;
+//         return;
+//     }
 
-    cout << "Building Tree from file " << csv_path << endl;
-    // BuildTree returns bool, not a unique_ptr
-    if (!filter_tree->BuildTree(FilterPattern(), max_depth, 1)) {
-        cerr << "Failed to build tree" << endl;
-        return;
-    }
+//     cout << "Building Tree from file " << csv_path << endl;
+//     // BuildTree returns bool, not a unique_ptr
+//     if (!filter_tree->BuildTree(FilterPattern(), max_depth, min_patterns_leaf)) {
+//         cerr << "Failed to build tree" << endl;
+//         return;
+//     }
     
-    // Save the tree
-    cout << "Saving tree to tree.bin" << endl;
-    if (!filter_tree->SaveTreeBinary(tree_path)) {
-        cerr << "Failed to save tree" << endl;
-    }
-    auto dot_tree = filter_tree->CreateDotTree();
-    std::ofstream dot_file("tree.dot");
-    if (dot_file.is_open()) {
-        dot_file << dot_tree;
-        dot_file.close();
-    }
-}
+//     // Save the tree
+//     cout << "Saving tree to tree.bin" << endl;
+//     if (!filter_tree->SaveTreeBinary(tree_path)) {
+//         cerr << "Failed to save tree" << endl;
+//     }
+//     auto dot_tree = filter_tree->CreateDotTree();
+//     std::ofstream dot_file("tree.dot");
+//     if (dot_file.is_open()) {
+//         dot_file << dot_tree;
+//         dot_file.close();
+//     }
+// }
 
 #ifdef WITH_PYTHON
 namespace py = pybind11;
 
 PYBIND11_MODULE(piles, m) {
     py::class_<PileSolver>(m, "PileSolver")
-        .def(py::init<>())
+        .def(py::init<int, int, bool, bool, const std::string&, int>(),
+             py::arg("num_piles"),
+             py::arg("num_cubes"),
+             py::arg("do_memoize") = true,
+             py::arg("do_diophantine") = true,
+             py::arg("tree_path") = "tree.bin",
+             py::arg("memoization_limit") = 26)
         .def("init_pos", &PileSolver::init_pos)
         .def("init_distribution", &PileSolver::init_distribution)
         .def("init_remaining", &PileSolver::init_remaining)
@@ -263,10 +288,6 @@ PYBIND11_MODULE(piles, m) {
                             std::vector<int>& pile, int64_t disallowed) {
             return self.make_pile(target, remaining, pos, pile, (__int128)disallowed);
         })
-        .def("build_diophantine_tree", &PileSolver::build_diophantine_tree,
-             py::arg("csv_path") = "diophantine.txt",
-             py::arg("tree_path") = "tree.bin",
-             py::arg("max_depth") = 40)
         .def("classify_pattern", [](PileSolver& self, const std::vector<int>& pile) {
             return self.classify_pattern(pile);
         });
