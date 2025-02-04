@@ -66,64 +66,54 @@ def solve(n_piles, n_cubes, diophantine=None):
     start_pos = solver.init_pos(assigned_piles)
     assigned_remaining = solver.init_remaining(assigned_piles)
 
-    disallowed = 0
-    # Initialize list to store all pile combinations
-    pile_combinations = [[]]
-    # Iterate through all piles
+    # Pre-calculate disallowed arrays for preassigned piles
+    preassigned_disallowed = {}
+    for pile_idx in range(n_piles):
+        if pile_idx < n_piles - 1:
+            preassigned_disallowed[pile_idx] = get_disallowed(assigned_piles[(pile_idx+1):])
+    
     nums = {}
-    precalc_time=defaultdict(int)
+    precalc_time = defaultdict(int)
+    # Store combinations along with their running disallowed value
+    pile_combinations = [([], 0)]  # (piles_list, running_disallowed)
+    
     for pile_idx in range(n_piles):
         s = 0
         new_combinations = []
-        # For each existing combination of piles
-        for prev_piles in tqdm.tqdm(pile_combinations):
-            # Calculate target and remaining for next pile
+        
+        for prev_piles, running_disallowed in tqdm.tqdm(pile_combinations):
             start_time = time.time()
             if pile_idx == 0:
                 target = assigned_remaining[0]
                 remaining = sums[n_cubes-1]
                 assigned_pile = assigned_piles[0]
-                curr_disallowed = get_disallowed(assigned_piles[1:])
+                curr_disallowed = preassigned_disallowed[0]
             else:
                 target = assigned_remaining[pile_idx]
-                preassigned_disallowed = 0
-                if pile_idx != n_piles-1:
-                    preassigned_disallowed = get_disallowed(assigned_piles[(pile_idx+1):])
-                curr_disallowed = get_disallowed(prev_piles) | preassigned_disallowed
+                curr_disallowed = running_disallowed | preassigned_disallowed.get(pile_idx, 0)
                 remaining = solver.calc_remaining(curr_disallowed)
                 assigned_pile = assigned_piles[pile_idx]
             
             precalc_time[pile_idx] += time.time()-start_time
-            # Generate next pile
+            
             next_piles = solver.make_pile(target, remaining, start_pos, assigned_pile, curr_disallowed)
-
-            # if pile_idx < 1:
-            #     before = len(next_piles)
-            #     start_time = time.time()
-            #     next_piles = filter_diophantine(next_piles, curr_disallowed, diophantine)
-            #     print(pile_idx, 'before', before, 'after', len(next_piles), 'took', time.time()-start_time)
-
             s += len(next_piles)
-            # Add new combinations
+            
+            # Update combinations with new running_disallowed values
             for next_pile in next_piles:
-                new_combination = prev_piles + [next_pile]
-                new_combinations.append(new_combination)
-
-            # if pile_idx==0:
-            #     # Print each combination to CSV file
-            #     with open('piles.csv', 'w') as f:
-            #         for combination in new_combinations:
-            #             # Convert each pile to a string of 0s and 1s
-            #             pile_str = ','.join(''.join(str(x) for x in pile) for pile in combination)
-            #             f.write(pile_str + '\n')
-            #     break
+                new_disallowed = running_disallowed | pile_to_bin(next_pile)
+                new_combinations.append((prev_piles + [next_pile], new_disallowed))
+            
         nums[int(pile_idx+1)] = s
         print(precalc_time[pile_idx])
         print(s)
         pile_combinations = new_combinations
     
-    print('precalc_time', sum(i for i in precalc_time.values()))
-    return nums, pile_combinations
+    # Extract just the pile combinations without the disallowed values for return
+    final_combinations = [piles for piles, _ in pile_combinations]
+
+    print("precalc time", sum(i for i in precalc_time.values()))
+    return nums, final_combinations
 
 def main():
     parser = argparse.ArgumentParser(description='Process pile and cube counts')
