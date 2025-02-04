@@ -24,12 +24,12 @@ private:
     const size_t n_piles;
 
 public:
-    PileSolver(int num_piles = 3, 
-               int num_cubes = 23, 
+    PileSolver(size_t num_piles = 3, 
+               size_t num_cubes = 23, 
                bool do_memoize = true,
                bool do_diophantine = true,
                const std::string& tree_path = "tree.bin", 
-               int memoization_limit = 27);
+               size_t memoization_limit = 27);
     static constexpr std::array<int, 100> make_sums();
     static constexpr std::array<int, 100> make_cubes();
     void initialize_memoization();

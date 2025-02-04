@@ -9,8 +9,9 @@
 #include <functional>
 
 #ifdef WITH_PYTHON
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/string.h>
 #endif
 
 using namespace std;
@@ -700,42 +701,33 @@ bool BitFilterTree::LoadTreeBinary(const string& filename) {
 
 
 #ifdef WITH_PYTHON
-namespace py = pybind11;
+namespace nb = nanobind;
 
-PYBIND11_MODULE(bitfiltertree, m) {
-    py::class_<BitFilterTree>(m, "BitFilterTree")
-        .def(py::init<int>())
+NB_MODULE(bitfiltertree, m) {
+    nb::class_<BitFilterTree>(m, "BitFilterTree")
+        .def(nb::init<size_t>())
         .def("build_tree_file", &BitFilterTree::BuildTreeFile,
-             py::arg("tree_path") = "tree.bin",
-             py::arg("max_depth") = 40,
-             py::arg("min_patterns_leaf") = 10,
-             "Build and save a decision tree to a file")
+             nb::arg("tree_path") = "tree.bin",
+             nb::arg("max_depth") = 40,
+             nb::arg("min_patterns_leaf") = 10)
         .def("read_filters_from_csv", &BitFilterTree::ReadFiltersFromCsv,
-             py::arg("filename"),
-             py::arg("cache_path"),
-             "Read filter patterns from a CSV file")
+             nb::arg("filename"),
+             nb::arg("cache_path"))
         .def("load_filters_from_cache", &BitFilterTree::LoadFiltersFromCache,
-             py::arg("cache_path"),
-             "Load filter patterns from the specified cache file")
+             nb::arg("cache_path"))
         .def("save_tree_binary", &BitFilterTree::SaveTreeBinary,
-             py::arg("filename"),
-             "Save the decision tree to a binary file")
+             nb::arg("filename"))
         .def("load_tree_binary", &BitFilterTree::LoadTreeBinary,
-             py::arg("filename"),
-             "Load a decision tree from a binary file")
-        .def("analyze_tree", &BitFilterTree::AnalyzeTree,
-             "Analyze the tree and return metrics about its structure")
-        .def("print_tree", &BitFilterTree::PrintTree,
-             "Print a text representation of the tree")
+             nb::arg("filename"))
+        .def("analyze_tree", &BitFilterTree::AnalyzeTree)
+        .def("print_tree", &BitFilterTree::PrintTree)
         .def("classify_pattern", &BitFilterTree::ClassifyPattern,
-             py::arg("set_bits"),
-             "Classify a bit pattern using the decision tree");
+             nb::arg("set_bits"));
 
-    // Define the TreeMetrics struct for Python
-    py::class_<BitFilterTree::TreeMetrics>(m, "TreeMetrics")
-        .def_readonly("avg_comparisons", &BitFilterTree::TreeMetrics::avg_comparisons)
-        .def_readonly("path_count", &BitFilterTree::TreeMetrics::path_count)
-        .def_readonly("comparison_count", &BitFilterTree::TreeMetrics::comparison_count);
+    nb::class_<BitFilterTree::TreeMetrics>(m, "TreeMetrics")
+        .def_ro("avg_comparisons", &BitFilterTree::TreeMetrics::avg_comparisons)
+        .def_ro("path_count", &BitFilterTree::TreeMetrics::path_count)
+        .def_ro("comparison_count", &BitFilterTree::TreeMetrics::comparison_count);
 
     m.doc() = R"pbdoc(
         BitFilterTree Module

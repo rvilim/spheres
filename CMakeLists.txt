@@ -16,14 +16,14 @@ set(CMAKE_CXX_COMPILER "/opt/homebrew/opt/llvm/bin/clang++")
 # Find Python
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 
-# Fetch pybind11
+# Fetch nanobind
 include(FetchContent)
 FetchContent_Declare(
-    pybind11
-    GIT_REPOSITORY https://github.com/pybind/pybind11
-    GIT_TAG        v2.11.1
+    nanobind
+    GIT_REPOSITORY https://github.com/wjakob/nanobind
+    GIT_TAG v1.8.0
 )
-FetchContent_MakeAvailable(pybind11)
+FetchContent_MakeAvailable(nanobind)
 
 # Set OpenMP flags for macOS BEFORE finding OpenMP
 if(APPLE)
@@ -48,7 +48,7 @@ find_package(OpenMP REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
 
 # Create the piles module
-pybind11_add_module(piles 
+nanobind_add_module(piles 
     src/piles.cpp
     src/bitfiltertree.cpp
 )
@@ -56,7 +56,7 @@ target_compile_definitions(piles PRIVATE WITH_PYTHON)
 target_link_libraries(piles PRIVATE OpenMP::OpenMP_CXX)
 
 # Create the bitfiltertree module
-pybind11_add_module(bitfiltertree 
+nanobind_add_module(bitfiltertree 
     src/bitfiltertree.cpp
 )
 target_compile_definitions(bitfiltertree PRIVATE WITH_PYTHON)

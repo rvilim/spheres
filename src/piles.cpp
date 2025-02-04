@@ -9,18 +9,19 @@
 #include "bitfiltertree.h"
 
 #ifdef WITH_PYTHON
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/string.h>
 #endif
 
 using namespace std;
 
-PileSolver::PileSolver(int num_piles, 
-                       int num_cubes, 
+PileSolver::PileSolver(size_t num_piles, 
+                       size_t num_cubes, 
                        bool do_memoize,
                        bool do_diophantine,
                        const std::string& tree_path, 
-                       int memoization_limit) 
+                       size_t memoization_limit) 
     : memoization_limit(memoization_limit),
       sums(make_sums()),
       cubes(make_cubes()),
@@ -259,21 +260,23 @@ int PileSolver::calc_remaining(__int128 disallowed) {
 // }
 
 #ifdef WITH_PYTHON
-namespace py = pybind11;
+namespace nb = nanobind;
 
-PYBIND11_MODULE(piles, m) {
-    py::class_<PileSolver>(m, "PileSolver")
-        .def(py::init<int, int, bool, bool, const std::string&, int>(),
-             py::arg("num_piles"),
-             py::arg("num_cubes"),
-             py::arg("do_memoize") = true,
-             py::arg("do_diophantine") = true,
-             py::arg("tree_path") = "tree.bin",
-             py::arg("memoization_limit") = 26)
+NB_MODULE(piles, m) {
+    nb::class_<PileSolver>(m, "PileSolver")
+        .def(nb::init<size_t, size_t, bool, bool, const std::string&, size_t>(),
+             nb::arg("num_piles"),
+             nb::arg("num_cubes"),
+             nb::arg("do_memoize") = true,
+             nb::arg("do_diophantine") = true,
+             nb::arg("tree_path") = "tree.bin",
+             nb::arg("memoization_limit") = 26)
         .def("init_pos", &PileSolver::init_pos)
         .def("init_distribution", &PileSolver::init_distribution)
         .def("init_remaining", &PileSolver::init_remaining)
-        .def("calc_remaining", &PileSolver::calc_remaining)
+        .def("calc_remaining", [](PileSolver& self, int64_t disallowed) {
+            return self.calc_remaining((__int128)disallowed);
+        })
         .def("make_pile", [](PileSolver& self, int target, int remaining, int pos, 
                             std::vector<int>& pile, int64_t disallowed) {
             return self.make_pile(target, remaining, pos, pile, (__int128)disallowed);
@@ -283,7 +286,7 @@ PYBIND11_MODULE(piles, m) {
         });
 
     m.doc() = R"pbdoc(
-        Pybind11 piles
+        Nanobind piles
         -----------------------
 
         .. currentmodule:: piles
@@ -296,9 +299,8 @@ PYBIND11_MODULE(piles, m) {
            make_pile
     )pbdoc";
 
-    m.def("initialize_memoization", &PileSolver::initialize_memoization, R"pbdoc(
-        Initialize the memoization table for faster lookups of small positions
-    )pbdoc");
+    m.def("initialize_memoization", &PileSolver::initialize_memoization, 
+          "Initialize the memoization table for faster lookups of small positions");
 
 #ifdef VERSION_INFO
     m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);

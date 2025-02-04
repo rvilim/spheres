@@ -71,12 +71,14 @@ def solve(n_piles, n_cubes, diophantine=None):
     pile_combinations = [[]]
     # Iterate through all piles
     nums = {}
+    precalc_time=defaultdict(int)
     for pile_idx in range(n_piles):
         s = 0
         new_combinations = []
         # For each existing combination of piles
         for prev_piles in tqdm.tqdm(pile_combinations):
             # Calculate target and remaining for next pile
+            start_time = time.time()
             if pile_idx == 0:
                 target = assigned_remaining[0]
                 remaining = sums[n_cubes-1]
@@ -91,7 +93,7 @@ def solve(n_piles, n_cubes, diophantine=None):
                 remaining = solver.calc_remaining(curr_disallowed)
                 assigned_pile = assigned_piles[pile_idx]
             
-            
+            precalc_time[pile_idx] += time.time()-start_time
             # Generate next pile
             next_piles = solver.make_pile(target, remaining, start_pos, assigned_pile, curr_disallowed)
 
@@ -116,9 +118,11 @@ def solve(n_piles, n_cubes, diophantine=None):
             #             f.write(pile_str + '\n')
             #     break
         nums[int(pile_idx+1)] = s
+        print(precalc_time[pile_idx])
         print(s)
         pile_combinations = new_combinations
-
+    
+    print('precalc_time', sum(i for i in precalc_time.values()))
     return nums, pile_combinations
 
 def main():
