@@ -121,16 +121,6 @@ bool PileSolver::classify_pattern(const vector<int>& pile) const {
 vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
                                           vector<int> &pile, __int128 disallowed) {
     vector<vector<int>> solutions;
-    // std::cout<<target<<" "<<pos<<std::endl;
-    // std::cout << "p: ";
-    // for (size_t i = 0; i < pile.size(); i++) {
-    //     std::cout << pile[i];
-    // }
-    // std::cout<<std::endl;
-    // auto bitstr = std::bitset<128>(disallowed).to_string().substr(128 - n_cubes);
-    // std::reverse(bitstr.begin(), bitstr.end());
-    // std::cout << "d: " << bitstr << std::endl;
-    // std::cout << std::endl;
 
     if (enable_memoize && (pos == memoization_limit - 1) && n_cubes>=memoization_limit) {
         auto valid_patterns = find_valid_patterns(target, disallowed);        
