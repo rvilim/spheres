@@ -7,8 +7,9 @@
 #include <map>
 #include <fstream>
 #include "bitfiltertree.h"
+#include <mutex>
+#include <atomic>
 
-#include <nanobind/nanobind.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/vector.h>
@@ -34,14 +35,14 @@ struct dtype_traits<__uint128_t> {
 
 using namespace std;
 
-
 // Rest of your code...
 PileSolver::PileSolver(size_t num_piles, 
                        size_t num_cubes, 
                        bool do_memoize,
                        bool do_diophantine,
                        const std::string& tree_path, 
-                       size_t memoization_limit) 
+                       size_t memoization_limit,
+                       const std::string& memoization_path)
     : memoization_limit(memoization_limit),
       sums(make_sums()),
       cubes(make_cubes()),
@@ -63,7 +64,12 @@ PileSolver::PileSolver(size_t num_piles,
         }
     }
 
-    if (enable_memoize) initialize_memoization();
+    if (enable_memoize) {
+        if (!load_memoization(memoization_path)) {
+            initialize_memoization();
+            save_memoization(memoization_path);
+        }
+    }
 }
 
 constexpr std::array<int, 100> PileSolver::make_sums() {
@@ -190,19 +196,21 @@ vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
     return solutions;
 }
 
-vector<__uint128_t> PileSolver::init_distribution() {
-    vector<__uint128_t> piles(n_piles, 0);
+vector<int> PileSolver::init_distribution() {
+    vector<int> assignments(n_cubes, -1);  // Initialize all positions as unassigned (-1)
     int target = sums[n_cubes-1]/n_piles;
 
-    BitFilterTree::SetBit(piles[0], n_cubes-1);
+    // Assign highest cube to pile 0
+    assignments[n_cubes-1] = 0;
 
+    // Assign cubes to other piles if needed
     for (int pile_num = 1; pile_num < n_piles; pile_num++) {
         if (cubes[n_cubes-pile_num]+cubes[n_cubes-pile_num-1] > target) {
-            BitFilterTree::SetBit(piles[pile_num], n_cubes-pile_num-1);
+            assignments[n_cubes-pile_num-1] = pile_num;
         }
     }
 
-    return piles;
+    return assignments;
 }
 
 vector<int> PileSolver::init_remaining(vector<__uint128_t> piles) {
@@ -237,53 +245,187 @@ int PileSolver::calc_remaining(__int128 disallowed) {
     return remaining;
 }
 
-// void PileSolver::build_diophantine_tree(const string& csv_path, const string& tree_path, int max_depth, int min_patterns_leaf) {
-//     cout << "Reading filters from " << csv_path << endl;
-//     // Create a default cache path based on the csv path
-//     string cache_path = csv_path + ".cache";
-//     if (!filter_tree->ReadFiltersFromCsv(csv_path, cache_path)) {
-//         cerr << "Failed to read filters" << endl;
-//         return;
-//     }
+vector<vector<int>> PileSolver::solve_from_assignment(const nb::ndarray<int> assignments,
+                                     int target_pile_num,
+                                     size_t num_threads) {
+    // Get raw pointer to numpy array data and dimensions
+    const int* data = assignments.data();
+    size_t num_examples = assignments.shape(0);
+    size_t size = assignments.shape(1);
 
-//     cout << "Building Tree from file " << csv_path << endl;
-//     // BuildTree returns bool, not a unique_ptr
-//     if (!filter_tree->BuildTree(FilterPattern(), max_depth, min_patterns_leaf)) {
-//         cerr << "Failed to build tree" << endl;
-//         return;
-//     }
+    // Vector to store all solutions across all examples
+    std::vector<std::vector<int>> all_assignments;
+    std::mutex all_assignments_mutex;  // Protect access to all_assignments
     
-//     // Save the tree
-//     cout << "Saving tree to tree.bin" << endl;
-//     if (!filter_tree->SaveTreeBinary(tree_path)) {
-//         cerr << "Failed to save tree" << endl;
-//     }
-//     auto dot_tree = filter_tree->CreateDotTree();
-//     std::ofstream dot_file("tree.dot");
-//     if (dot_file.is_open()) {
-//         dot_file << dot_tree;
-//         dot_file.close();
-//     }
-// }
+    // Create thread pool
+    std::vector<std::thread> threads;
+    std::atomic<size_t> next_example{0};
+    
+    // Launch worker threads
+    const size_t chunk_size = 100;
+    for (size_t thread_id = 0; thread_id < num_threads; thread_id++) {
+        threads.emplace_back([&, thread_id]() {
+            while (true) {
+                // Get next chunk of examples to process
+                size_t chunk_start = next_example.fetch_add(chunk_size);
+                if (chunk_start >= num_examples) {
+                    break;
+                }
+                
+                // Calculate actual chunk end (handling the last chunk properly)
+                size_t chunk_end = std::min(chunk_start + chunk_size, num_examples);
+                
+                // Process all examples in this chunk
+                for (size_t example = chunk_start; example < chunk_end; example++) {
+                    // Initialize target pile and disallowed mask for this example
+                    __uint128_t target_pile = 0;
+                    __uint128_t disallowed = 0;
+                    
+                    // Process assignments to build disallowed bits
+                    for (size_t i = 0; i < size; i++) {
+                        int current_assignment = data[example * size + i];
+                        if (current_assignment != -1) {
+                            if (current_assignment == target_pile_num) {
+                                BitFilterTree::SetBit(target_pile, i);
+                            } else {
+                                disallowed |= (__uint128_t(1) << i);
+                            }
+                        }
+                    }
+                    
+                    // Calculate target sum for the pile we're solving
+                    int target = sums[n_cubes-1]/n_piles - sum_pile(target_pile);
+                    
+                    // Find highest available position
+                    int pos = n_cubes - 1;
+                    while (pos >= 0 && (disallowed & (__uint128_t(1) << pos))) {
+                        pos--;
+                    }
+                    
+                    // Calculate remaining total
+                    int remaining = calc_remaining(disallowed);
+
+                    // Make the pile and combine with initial assignments
+                    auto solutions = make_pile(target, remaining, pos, target_pile, disallowed);
+                    
+                    // Thread-safe addition of solutions
+                    if (!solutions.empty()) {
+                        std::lock_guard<std::mutex> lock(all_assignments_mutex);
+                        for (const auto& solution : solutions) {
+                            std::vector<int> final_assignments(size);
+                            for (size_t i = 0; i < size; i++) {
+                                final_assignments[i] = data[example * size + i];
+                            }
+                            
+                            for (size_t i = 0; i < n_cubes; i++) {
+                                if (solution & (__uint128_t(1) << i)) {
+                                    final_assignments[i] = target_pile_num;
+                                }
+                            }
+                            
+                            all_assignments.push_back(final_assignments);
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Wait for all threads to complete
+    for (auto& thread : threads) {
+        thread.join();
+    }
+    cout<<"All joined"<<endl;
+    return all_assignments;
+}
+
+bool PileSolver::load_memoization(const std::string& path) {
+    if (path.empty()) return false;
+    
+    std::ifstream file(path, std::ios::binary);
+    if (!file.good()) return false;
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    try {
+        size_t map_size;
+        file.read(reinterpret_cast<char*>(&map_size), sizeof(size_t));
+        
+        for (size_t i = 0; i < map_size; i++) {
+            int sum;
+            size_t vec_size;
+            file.read(reinterpret_cast<char*>(&sum), sizeof(int));
+            file.read(reinterpret_cast<char*>(&vec_size), sizeof(size_t));
+            
+            std::vector<__int128> values(vec_size);
+            file.read(reinterpret_cast<char*>(values.data()), vec_size * sizeof(__int128));
+            precalculated_sums[sum] = std::move(values);
+        }
+        
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cout << "Loaded memoization from file in " << duration.count() << " ms" << std::endl;
+        return true;
+    } catch (...) {
+        std::cerr << "Error loading memoization file" << std::endl;
+        return false;
+    }
+}
+
+void PileSolver::save_memoization(const std::string& path) {
+    if (path.empty()) return;
+    
+    std::ofstream file(path, std::ios::binary);
+    if (!file.good()) {
+        std::cerr << "Error opening memoization file for writing" << std::endl;
+        return;
+    }
+    
+    try {
+        size_t map_size = precalculated_sums.size();
+        file.write(reinterpret_cast<const char*>(&map_size), sizeof(size_t));
+        
+        for (const auto& [sum, values] : precalculated_sums) {
+            size_t vec_size = values.size();
+            file.write(reinterpret_cast<const char*>(&sum), sizeof(int));
+            file.write(reinterpret_cast<const char*>(&vec_size), sizeof(size_t));
+            file.write(reinterpret_cast<const char*>(values.data()), vec_size * sizeof(__int128));
+        }
+        std::cout << "Saved memoization to file" << std::endl;
+    } catch (...) {
+        std::cerr << "Error saving memoization file" << std::endl;
+    }
+}
 
 NB_MODULE(piles, m) {
     nb::class_<PileSolver>(m, "PileSolver")
-        .def(nb::init<size_t, size_t, bool, bool, const std::string&, size_t>(),
+        .def(nb::init<size_t, size_t, bool, bool, const std::string&, size_t, const std::string&>(),
              nb::arg("num_piles"),
              nb::arg("num_cubes"),
              nb::arg("do_memoize") = true,
              nb::arg("do_diophantine") = true,
              nb::arg("tree_path") = "tree.bin",
-             nb::arg("memoization_limit") = 26)
+             nb::arg("memoization_limit") = 26,
+             nb::arg("memoization_path") = "")
         .def("init_pos", &PileSolver::init_pos)
         .def("init_distribution", &PileSolver::init_distribution)
         .def("init_remaining", &PileSolver::init_remaining)
-        .def("calc_remaining", &PileSolver::calc_remaining)
+        .def("calc_remaining", [](PileSolver& self, __int128 disallowed) -> int {
+            return self.calc_remaining(disallowed);
+        })
         .def("make_pile", [](PileSolver& self, int target, int remaining, int pos, 
-                            __uint128_t pile, __int128 disallowed) {
+                            __uint128_t pile, __int128 disallowed) -> std::vector<__uint128_t> {
             return self.make_pile(target, remaining, pos, pile, disallowed);
         })
-        .def("classify_pattern", &PileSolver::classify_pattern);
+        .def("classify_pattern", [](PileSolver& self, __uint128_t pile) -> bool {
+            return self.classify_pattern(pile);
+        })
+        .def("solve_from_assignment", &PileSolver::solve_from_assignment,
+             nb::arg("assignments"),
+             nb::arg("target_pile_num"),
+             nb::arg("num_threads") = 1,
+             "Solve for a pile given existing assignments. Returns a list of possible assignments, where each assignment is a numpy array and -1 indicates unassigned")
+        .def("initialize_memoization", &PileSolver::initialize_memoization, 
+              "Initialize the memoization table for faster lookups of small positions");
 
     m.doc() = R"pbdoc(
         Nanobind piles
@@ -299,9 +441,10 @@ NB_MODULE(piles, m) {
            make_pile
     )pbdoc";
 
-    m.def("initialize_memoization", &PileSolver::initialize_memoization, 
-          "Initialize the memoization table for faster lookups of small positions");
-
+    m.def("process_u128_list", [](const std::vector<__uint128_t> &vals) {
+        // do something with vals
+        return vals.size(); // for example
+    });
 #ifdef VERSION_INFO
     m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
 #else
