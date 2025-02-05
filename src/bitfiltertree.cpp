@@ -8,13 +8,13 @@
 #include <omp.h>
 #include <functional>
 
-#ifdef WITH_PYTHON
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/string.h>
-#endif
 
 using namespace std;
+namespace nb = nanobind;  // Add this line to use nb:: shorthand
+
 
 BitFilterTree::BitFilterTree(size_t max_bits) : BITS(max_bits) {
     // Initialize root_ as nullptr
@@ -700,7 +700,6 @@ bool BitFilterTree::LoadTreeBinary(const string& filename) {
 
 
 
-#ifdef WITH_PYTHON
 namespace nb = nanobind;
 
 NB_MODULE(bitfiltertree, m) {
@@ -747,4 +746,3 @@ NB_MODULE(bitfiltertree, m) {
     m.attr("__version__") = "dev";
 #endif
 }
-#endif

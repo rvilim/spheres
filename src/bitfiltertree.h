@@ -60,6 +60,16 @@ public:
     bool SaveFiltersToCache(const std::string& cache_path);
     bool LoadFiltersFromCache(const std::string& cache_path);
 
+    // Helper functions for bit operations
+    static inline bool IsBitSet(__uint128_t value, size_t bit) {
+        return (value & ((__uint128_t)1 << bit)) != 0;
+    }
+
+    static inline void SetBit(__uint128_t& value, size_t bit) {
+        if (bit < 128) {
+            value |= (__uint128_t(1) << bit);
+        }
+    }
 private:
     const size_t BITS;
     std::vector<FilterPattern> patterns_;
@@ -77,17 +87,6 @@ private:
 
         // Print the upper and lower parts in binary
         std::cout << std::bitset<64>(upper) << std::bitset<64>(lower) << std::endl;
-    }
-
-    // Helper functions for bit operations
-    static inline bool IsBitSet(__uint128_t value, size_t bit) {
-        return (value & ((__uint128_t)1 << bit)) != 0;
-    }
-
-    static inline void SetBit(__uint128_t& value, size_t bit) {
-        if (bit < 128) {
-            value |= (__uint128_t(1) << bit);
-        }
     }
     
     // Private helper methods

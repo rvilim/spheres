@@ -35,18 +35,18 @@ public:
     void initialize_memoization();
     
     // Core pile manipulation functions
-    vector<vector<int>> make_pile(int target, int remaining, int pos,
-                                vector<int>& pile, __int128 disallowed);
+    vector<__uint128_t> make_pile(int target, int remaining, int pos,
+                                __uint128_t pile, __int128 disallowed);
     int calc_remaining(__int128 disallowed);
-    int sum_pile(vector<int> pile);
+    int sum_pile(__uint128_t pile);
 
     // Initialization functions
-    vector<vector<int>> init_distribution();
-    vector<int> init_remaining(vector<vector<int>> piles);
-    int init_pos(vector<vector<int>> piles);
+    vector<__uint128_t> init_distribution();
+    vector<int> init_remaining(vector<__uint128_t> piles);
+    int init_pos(vector<__uint128_t> piles);
 
     void build_diophantine_tree(const string& csv_path = "diophantine_small.txt", const string& tree_path = "tree.bin", int max_depth = 40, int min_patterns_leaf=1);
-    bool classify_pattern(const vector<int>& pile) const;
+    bool classify_pattern(__uint128_t pile) const;
 
 private:
     vector<__int128> find_valid_patterns(int target, __int128 disallowed);

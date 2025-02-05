@@ -8,14 +8,34 @@
 #include <fstream>
 #include "bitfiltertree.h"
 
-#ifdef WITH_PYTHON
 #include <nanobind/nanobind.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/string.h>
-#endif
+#include <cstdint> // for __uint128_t
+
+namespace nb = nanobind;  // Add this line to use nb:: shorthand
+
+// Now we can specialize it
+namespace nanobind::detail {
+
+template <>
+struct dtype_traits<__uint128_t> {
+    static constexpr dlpack::dtype value {
+        (uint8_t) dlpack::dtype_code::UInt,
+        128,
+        1
+    };
+    static constexpr auto name = const_name("uint128");
+};
+
+} // end namespace nanobind::detail
 
 using namespace std;
 
+
+// Rest of your code...
 PileSolver::PileSolver(size_t num_piles, 
                        size_t num_cubes, 
                        bool do_memoize,
@@ -80,10 +100,12 @@ void PileSolver::initialize_memoization() {
     std::cout << "Memoization initialization took " << duration.count() << " ms" << std::endl;
 }
 
-int PileSolver::sum_pile(vector<int> pile) {
-    int s=0;
-    for(int pos=0; pos<n_cubes; pos++){
-        s+=pile[pos]*cubes[pos];
+int PileSolver::sum_pile(__uint128_t pile) {
+    int s = 0;
+    for(size_t pos = 0; pos < n_cubes; pos++) {
+        if (BitFilterTree::IsBitSet(pile, pos)) {
+            s += cubes[pos];
+        }
     }
     return s;
 }
@@ -106,30 +128,24 @@ vector<__int128> PileSolver::find_valid_patterns(int target, __int128 disallowed
     return valid_patterns;
 }
 
-bool PileSolver::classify_pattern(const vector<int>& pile) const {
+bool PileSolver::classify_pattern(__uint128_t pile) const {
     if (!filter_tree) return false;
-    
-    // Convert pile vector to __uint128_t
-    __uint128_t set_bits = 0;
-    for (size_t i = 0; i < n_cubes; i++) {
-        if (pile[i] == 1) {
-            set_bits |= ((__uint128_t)1 << i);
-        }
-    }
-    return filter_tree->ClassifyPattern(set_bits);
+    return filter_tree->ClassifyPattern(pile);
 }
 
-vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
-                                          vector<int> &pile, __int128 disallowed) {
-    vector<vector<int>> solutions;
+vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
+                                       __uint128_t pile, __int128 disallowed) {
+    vector<__uint128_t> solutions;
 
-    if (enable_memoize && (pos == memoization_limit - 1) && n_cubes>=memoization_limit) {
+    if (enable_memoize && (pos == memoization_limit - 1) && n_cubes >= memoization_limit) {
         auto valid_patterns = find_valid_patterns(target, disallowed);        
         
         for (const auto& bits : valid_patterns) {
-            vector<int> new_solution = pile;
+            __uint128_t new_solution = pile;
             for (int i = 0; i < memoization_limit; i++) {
-                new_solution[i] = (bits & ((__int128)1 << i)) ? 1 : 0;
+                if (bits & ((__int128)1 << i)) {
+                    BitFilterTree::SetBit(new_solution, i);
+                }
             }
             
             if (!enable_diophantine || (enable_diophantine && !classify_pattern(new_solution))) {
@@ -141,7 +157,7 @@ vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
 
     // If current position is disallowed, just move down one position
     if (disallowed & ((__int128)1 << pos)) {
-        if (pos==0) return solutions;
+        if (pos == 0) return solutions;
         return make_pile(target, remaining, pos - 1, pile, disallowed);
     }
 
@@ -150,21 +166,21 @@ vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
     }
 
     if (cubes[pos] == target) {
-        pile[pos] = true;
+        BitFilterTree::SetBit(pile, pos);
         if (!enable_diophantine || (enable_diophantine && !classify_pattern(pile))) {
             solutions.push_back(pile);
         }
-        pile[pos] = false;
+        pile &= ~(__uint128_t(1) << pos); // Clear the bit
     }
 
     if (pos == 0) return solutions;
 
     // Try setting the current position
     if (target - cubes[pos] > 0) {
-        pile[pos] = true;
+        BitFilterTree::SetBit(pile, pos);
         auto sub_solutions = make_pile(target - cubes[pos], remaining - cubes[pos], pos - 1, pile, disallowed);
         solutions.insert(solutions.end(), sub_solutions.begin(), sub_solutions.end());
-        pile[pos] = false;
+        pile &= ~(__uint128_t(1) << pos); // Clear the bit
     }
 
     // Try without setting the current position
@@ -174,50 +190,41 @@ vector<vector<int>> PileSolver::make_pile(int target, int remaining, int pos,
     return solutions;
 }
 
-vector<vector<int>> PileSolver::init_distribution() {
-    vector<vector<int>> piles(n_piles, vector<int>(n_cubes, false));
-
+vector<__uint128_t> PileSolver::init_distribution() {
+    vector<__uint128_t> piles(n_piles, 0);
     int target = sums[n_cubes-1]/n_piles;
 
-    piles[0][n_cubes-1]=true;
+    BitFilterTree::SetBit(piles[0], n_cubes-1);
 
-    for (int pile_num=1; pile_num<n_piles; pile_num++){
-        // The condition here is that we can place things without loss of generality
-        // as long as two adjacent cubes add up to greater than the target. As soon
-        // as that's not true the smaller could either go in a new pile, or double up
-        // with an already placed pile, and we have to leave it to the main solver to
-        // figure tha one out.
-        if (cubes[n_cubes-pile_num]+cubes[n_cubes-pile_num-1]>target){
-            piles[pile_num][n_cubes-pile_num-1]=true;
+    for (int pile_num = 1; pile_num < n_piles; pile_num++) {
+        if (cubes[n_cubes-pile_num]+cubes[n_cubes-pile_num-1] > target) {
+            BitFilterTree::SetBit(piles[pile_num], n_cubes-pile_num-1);
         }
     }
 
     return piles;
 }
 
-vector<int> PileSolver::init_remaining(vector<vector<int>> piles) {
-    vector<int> remaining={};
-    for(auto & pile : piles){
+vector<int> PileSolver::init_remaining(vector<__uint128_t> piles) {
+    vector<int> remaining;
+    for(auto pile : piles) {
         remaining.emplace_back(sums[n_cubes - 1] / n_piles - sum_pile(pile));
     }
-
     return remaining;
 }
 
-int PileSolver::init_pos(vector<vector<int>> piles) {
-    for (int i=n_piles-1; i>=0;i--){
+int PileSolver::init_pos(vector<__uint128_t> piles) {
+    for (int i = n_piles-1; i >= 0; i--) {
         auto pile = piles[i];
-
-        for(int j=0; j<n_cubes; j++){
-            if (pile[j]){
+        for(int j = 0; j < n_cubes; j++) {
+            if (BitFilterTree::IsBitSet(pile, j)) {
                 return j-1;
             }
         }
     }
-    cout<<"yikes init_pos"<<endl;
+    cout << "yikes init_pos" << endl;
     return -1;
 }
-
 
 int PileSolver::calc_remaining(__int128 disallowed) {
     int remaining = sums[n_cubes-1];
@@ -259,9 +266,6 @@ int PileSolver::calc_remaining(__int128 disallowed) {
 //     }
 // }
 
-#ifdef WITH_PYTHON
-namespace nb = nanobind;
-
 NB_MODULE(piles, m) {
     nb::class_<PileSolver>(m, "PileSolver")
         .def(nb::init<size_t, size_t, bool, bool, const std::string&, size_t>(),
@@ -274,16 +278,12 @@ NB_MODULE(piles, m) {
         .def("init_pos", &PileSolver::init_pos)
         .def("init_distribution", &PileSolver::init_distribution)
         .def("init_remaining", &PileSolver::init_remaining)
-        .def("calc_remaining", [](PileSolver& self, int64_t disallowed) {
-            return self.calc_remaining((__int128)disallowed);
-        })
+        .def("calc_remaining", &PileSolver::calc_remaining)
         .def("make_pile", [](PileSolver& self, int target, int remaining, int pos, 
-                            std::vector<int>& pile, int64_t disallowed) {
-            return self.make_pile(target, remaining, pos, pile, (__int128)disallowed);
+                            __uint128_t pile, __int128 disallowed) {
+            return self.make_pile(target, remaining, pos, pile, disallowed);
         })
-        .def("classify_pattern", [](PileSolver& self, const std::vector<int>& pile) {
-            return self.classify_pattern(pile);
-        });
+        .def("classify_pattern", &PileSolver::classify_pattern);
 
     m.doc() = R"pbdoc(
         Nanobind piles
@@ -308,4 +308,3 @@ NB_MODULE(piles, m) {
     m.attr("__version__") = "dev";
 #endif
 }
-#endif
