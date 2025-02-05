@@ -251,7 +251,7 @@ vector<vector<int>> PileSolver::solve_from_assignment(const nb::ndarray<int> ass
     // Get raw pointer to numpy array data and dimensions
     const int* data = assignments.data();
     size_t num_examples = assignments.shape(0);
-    size_t size = assignments.shape(1);
+    // size_t size = assignments.shape(1);
 
     // Vector to store all solutions across all examples
     std::vector<std::vector<int>> all_assignments;
@@ -282,8 +282,8 @@ vector<vector<int>> PileSolver::solve_from_assignment(const nb::ndarray<int> ass
                     __uint128_t disallowed = 0;
                     
                     // Process assignments to build disallowed bits
-                    for (size_t i = 0; i < size; i++) {
-                        int current_assignment = data[example * size + i];
+                    for (size_t i = 0; i < n_cubes; i++) {
+                        int current_assignment = data[example * n_cubes + i];
                         if (current_assignment != -1) {
                             if (current_assignment == target_pile_num) {
                                 BitFilterTree::SetBit(target_pile, i);
@@ -312,9 +312,9 @@ vector<vector<int>> PileSolver::solve_from_assignment(const nb::ndarray<int> ass
                     if (!solutions.empty()) {
                         std::lock_guard<std::mutex> lock(all_assignments_mutex);
                         for (const auto& solution : solutions) {
-                            std::vector<int> final_assignments(size);
-                            for (size_t i = 0; i < size; i++) {
-                                final_assignments[i] = data[example * size + i];
+                            std::vector<int> final_assignments(n_cubes);
+                            for (size_t i = 0; i < n_cubes; i++) {
+                                final_assignments[i] = data[example * n_cubes + i];
                             }
                             
                             for (size_t i = 0; i < n_cubes; i++) {
