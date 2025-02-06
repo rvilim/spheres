@@ -16,6 +16,14 @@ using namespace std;
 
 class PileSolver {
 private:
+    struct PileSetup {
+        __uint128_t target_pile;
+        __uint128_t disallowed;
+        int target;
+        int pos;
+        int remaining;
+    };
+
     const size_t memoization_limit;
     std::map<int, std::vector<__int128>> precalculated_sums;
     const std::array<int, 100> sums;
@@ -28,6 +36,9 @@ private:
     std::vector<__uint128_t> preassigned_piles;
     std::vector<int> preassigned_remaining;
     std::vector<__uint128_t> preassigned_disallowed;
+
+    // Add the new private helper method
+    PileSetup setup_pile_calculation(const int* data, size_t example, int target_pile_num);
 
 public:
     PileSolver(size_t num_piles = 3, 
@@ -54,9 +65,10 @@ public:
 
     void build_diophantine_tree(const string& csv_path = "diophantine_small.txt", const string& tree_path = "tree.bin", int max_depth = 40, int min_patterns_leaf=1);
     bool classify_pattern(__uint128_t pile) const;
-    vector<vector<int>> solve_from_assignment(const nb::ndarray<int> assignments,
-                                     int target_pile_num,
-                                     size_t num_threads = 1);
+    nb::ndarray<nb::numpy, int, nb::ndim<2>> solve_from_assignment(
+        const nb::ndarray<int> assignments,
+        int target_pile_num,
+        size_t num_threads = 1);
 private:
     vector<__int128> find_valid_patterns(int target, __int128 disallowed);
     bool load_memoization(const std::string& path);

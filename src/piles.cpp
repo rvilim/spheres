@@ -245,85 +245,119 @@ int PileSolver::calc_remaining(__int128 disallowed) {
     return remaining;
 }
 
-vector<vector<int>> PileSolver::solve_from_assignment(const nb::ndarray<int> assignments,
-                                     int target_pile_num,
-                                     size_t num_threads) {
-    // Get raw pointer to numpy array data and dimensions
+PileSolver::PileSetup PileSolver::setup_pile_calculation(const int* data, size_t example, int target_pile_num) {
+    PileSetup setup = {0, 0, 0, 0, 0};
+    
+    // Process assignments to build disallowed bits
+    for (size_t i = 0; i < n_cubes; i++) {
+        int current_assignment = data[example * n_cubes + i];
+        if (current_assignment != -1) {
+            if (current_assignment == target_pile_num) {
+                BitFilterTree::SetBit(setup.target_pile, i);
+            } else {
+                setup.disallowed |= (__uint128_t(1) << i);
+            }
+        }
+    }
+    
+    // Calculate target sum for the pile we're solving
+    setup.target = sums[n_cubes-1]/n_piles - sum_pile(setup.target_pile);
+    
+    // Find highest available position
+    setup.pos = n_cubes - 1;
+    while (setup.pos >= 0 && (setup.disallowed & (__uint128_t(1) << setup.pos))) {
+        setup.pos--;
+    }
+    
+    // Calculate remaining total
+    setup.remaining = calc_remaining(setup.disallowed);
+    
+    return setup;
+}
+
+nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
+    const nb::ndarray<int> assignments,
+    int target_pile_num,
+    size_t num_threads) {
+    auto start = std::chrono::high_resolution_clock::now();
+
     const int* data = assignments.data();
     size_t num_examples = assignments.shape(0);
-    // size_t size = assignments.shape(1);
 
-    // Vector to store all solutions across all examples
-    std::vector<std::vector<int>> all_assignments;
-    std::mutex all_assignments_mutex;  // Protect access to all_assignments
-    
-    // Create thread pool
-    std::vector<std::thread> threads;
+    // Vector to store solutions for each example
+    std::vector<std::vector<__uint128_t>> all_pile_solutions(num_examples);
     std::atomic<size_t> next_example{0};
+    std::vector<std::thread> threads;
     
-    // Launch worker threads
-    const size_t chunk_size = 100;
+    // First pass: calculate all pile solutions
     for (size_t thread_id = 0; thread_id < num_threads; thread_id++) {
-        threads.emplace_back([&, thread_id]() {
+        threads.emplace_back([&]() {
+            constexpr size_t CHUNK_SIZE = 128;  // Process 32 examples at a time
             while (true) {
-                // Get next chunk of examples to process
-                size_t chunk_start = next_example.fetch_add(chunk_size);
-                if (chunk_start >= num_examples) {
-                    break;
-                }
+                size_t chunk_start = next_example.fetch_add(CHUNK_SIZE);
+                if (chunk_start >= num_examples) break;
                 
-                // Calculate actual chunk end (handling the last chunk properly)
-                size_t chunk_end = std::min(chunk_start + chunk_size, num_examples);
+                // Calculate actual chunk size (might be smaller for last chunk)
+                size_t chunk_end = std::min(chunk_start + CHUNK_SIZE, num_examples);
                 
                 // Process all examples in this chunk
                 for (size_t example = chunk_start; example < chunk_end; example++) {
-                    // Initialize target pile and disallowed mask for this example
-                    __uint128_t target_pile = 0;
-                    __uint128_t disallowed = 0;
-                    
-                    // Process assignments to build disallowed bits
-                    for (size_t i = 0; i < n_cubes; i++) {
-                        int current_assignment = data[example * n_cubes + i];
-                        if (current_assignment != -1) {
-                            if (current_assignment == target_pile_num) {
-                                BitFilterTree::SetBit(target_pile, i);
-                            } else {
-                                disallowed |= (__uint128_t(1) << i);
-                            }
-                        }
-                    }
-                    
-                    // Calculate target sum for the pile we're solving
-                    int target = sums[n_cubes-1]/n_piles - sum_pile(target_pile);
-                    
-                    // Find highest available position
-                    int pos = n_cubes - 1;
-                    while (pos >= 0 && (disallowed & (__uint128_t(1) << pos))) {
-                        pos--;
-                    }
-                    
-                    // Calculate remaining total
-                    int remaining = calc_remaining(disallowed);
+                    auto setup = setup_pile_calculation(data, example, target_pile_num);
+                    all_pile_solutions[example] = make_pile(setup.target, setup.remaining, setup.pos, 
+                                                          setup.target_pile, setup.disallowed);
+                }
+            }
+        });
+    }
+    
+    for (auto& thread : threads) {
+        thread.join();
+    }
 
-                    // Make the pile and combine with initial assignments
-                    auto solutions = make_pile(target, remaining, pos, target_pile, disallowed);
+    // Count total solutions
+    size_t total_solutions = 0;
+    for (const auto& solutions : all_pile_solutions) {
+        total_solutions += solutions.size();
+    }
+
+    // Allocate memory for the result
+    int* result_data = new int[total_solutions * n_cubes];
+
+    // Create capsule to manage memory
+    nb::capsule owner(result_data, [](void *p) noexcept {
+        delete[] (int *) p;
+    });
+
+    nb::ndarray<nb::numpy, int, nb::ndim<2>> result(
+        result_data,
+        { total_solutions, n_cubes },
+        owner
+    );
+    
+    // Reset for second pass
+    next_example = 0;
+    std::atomic<size_t> current_solution_idx{0};
+    threads.clear();
+    
+    // Second pass: fill the result array
+    for (size_t thread_id = 0; thread_id < num_threads; thread_id++) {
+        threads.emplace_back([&]() {
+            while (true) {
+                size_t example = next_example.fetch_add(1);
+                if (example >= num_examples) break;
+                
+                const auto& solutions = all_pile_solutions[example];
+                for (const auto& solution : solutions) {
+                    size_t sol_idx = current_solution_idx.fetch_add(1);
+                    // Copy initial assignments
+                    std::memcpy(&result_data[sol_idx * n_cubes], 
+                              &data[example * n_cubes], 
+                              n_cubes * sizeof(int));
                     
-                    // Thread-safe addition of solutions
-                    if (!solutions.empty()) {
-                        std::lock_guard<std::mutex> lock(all_assignments_mutex);
-                        for (const auto& solution : solutions) {
-                            std::vector<int> final_assignments(n_cubes);
-                            for (size_t i = 0; i < n_cubes; i++) {
-                                final_assignments[i] = data[example * n_cubes + i];
-                            }
-                            
-                            for (size_t i = 0; i < n_cubes; i++) {
-                                if (solution & (__uint128_t(1) << i)) {
-                                    final_assignments[i] = target_pile_num;
-                                }
-                            }
-                            
-                            all_assignments.push_back(final_assignments);
+                    // Update with solution bits
+                    for (size_t i = 0; i < n_cubes; i++) {
+                        if (solution & (__uint128_t(1) << i)) {
+                            result_data[sol_idx * n_cubes + i] = target_pile_num;
                         }
                     }
                 }
@@ -331,12 +365,14 @@ vector<vector<int>> PileSolver::solve_from_assignment(const nb::ndarray<int> ass
         });
     }
     
-    // Wait for all threads to complete
     for (auto& thread : threads) {
         thread.join();
     }
-    cout<<"All joined"<<endl;
-    return all_assignments;
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    
+    return result;
 }
 
 bool PileSolver::load_memoization(const std::string& path) {
