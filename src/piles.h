@@ -1,16 +1,18 @@
 //
 // Created by Ryan Vilim on 2/12/22.
 //
-#include <vector>
-#include <array>
-#include <map>
-#include <nanobind/ndarray.h>
-#include "bitfiltertree.h"
-
 #ifndef PILES_PILES_H
 #define PILES_PILES_H
 
-namespace nb = nanobind;  // Add this line to use nb:: shorthand
+#include <vector>
+#include <array>
+#include <map>
+#include "bitfiltertree.h"
+// Wrap nanobind-specific includes
+#ifdef NB_MODULE
+#include <nanobind/ndarray.h>
+namespace nb = nanobind;
+#endif
 
 using namespace std;
 
@@ -25,7 +27,7 @@ private:
     };
 
     const size_t memoization_limit;
-    std::map<int, std::vector<__int128>> precalculated_sums;
+    std::map<int, std::vector<__uint128_t>> precalculated_sums;
     const std::array<int, 100> sums;
     const std::array<int, 100> cubes;
     std::unique_ptr<BitFilterTree> filter_tree;
@@ -54,8 +56,8 @@ public:
     
     // Core pile manipulation functions
     vector<__uint128_t> make_pile(int target, int remaining, int pos,
-                                __uint128_t pile, __int128 disallowed);
-    int calc_remaining(__int128 disallowed);
+                                __uint128_t pile, __uint128_t disallowed, bool first_level);
+    int calc_remaining(__uint128_t disallowed);
     int sum_pile(__uint128_t pile);
 
     // Initialization functions
@@ -65,12 +67,14 @@ public:
 
     void build_diophantine_tree(const string& csv_path = "diophantine_small.txt", const string& tree_path = "tree.bin", int max_depth = 40, int min_patterns_leaf=1);
     bool classify_pattern(__uint128_t pile) const;
+    #ifdef NB_MODULE
     nb::ndarray<nb::numpy, int, nb::ndim<2>> solve_from_assignment(
         const nb::ndarray<int> assignments,
         int target_pile_num,
         size_t num_threads = 1);
+    #endif
 private:
-    vector<__int128> find_valid_patterns(int target, __int128 disallowed);
+    vector<__uint128_t> find_valid_patterns(int target, __uint128_t disallowed);
     bool load_memoization(const std::string& path);
     void save_memoization(const std::string& path);
 };

@@ -70,6 +70,16 @@ public:
             value |= (__uint128_t(1) << bit);
         }
     }
+
+    static inline void PrintBits(__uint128_t value) {
+        // Split the 128-bit value into two 64-bit parts
+        uint64_t lower = static_cast<uint64_t>(value);         // Lower 64 bits
+        uint64_t upper = static_cast<uint64_t>(value >> 64);   // Upper 64 bits
+
+        // Print the upper and lower parts in binary
+        std::cout << std::bitset<64>(upper) << std::bitset<64>(lower) << std::endl;
+    }
+
 private:
     const size_t BITS;
     std::vector<FilterPattern> patterns_;
@@ -79,15 +89,6 @@ private:
     // exist in the pile we are considering. If disallowed & high_bit_mask!=0 then we 
     // ignore this pattern
     __uint128_t high_bit_mask;  
-    
-    static inline void PrintBits(__uint128_t value) {
-        // Split the 128-bit value into two 64-bit parts
-        uint64_t lower = static_cast<uint64_t>(value);         // Lower 64 bits
-        uint64_t upper = static_cast<uint64_t>(value >> 64);   // Upper 64 bits
-
-        // Print the upper and lower parts in binary
-        std::cout << std::bitset<64>(upper) << std::bitset<64>(lower) << std::endl;
-    }
     
     // Private helper methods
     void GeneratePatternsRecursive(std::vector<FilterPattern>& patterns,

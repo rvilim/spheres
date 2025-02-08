@@ -8,12 +8,15 @@
 #include <omp.h>
 #include <functional>
 
+// Wrap nanobind-specific includes and code
+#ifdef NB_MODULE
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/string.h>
+namespace nb = nanobind;
+#endif
 
 using namespace std;
-namespace nb = nanobind;  // Add this line to use nb:: shorthand
 
 
 BitFilterTree::BitFilterTree(size_t max_bits) : BITS(max_bits) {
@@ -698,10 +701,8 @@ bool BitFilterTree::LoadTreeBinary(const string& filename) {
     return root_ != nullptr;
 }
 
-
-
-namespace nb = nanobind;
-
+// Wrap the module definition
+#ifdef NB_MODULE
 NB_MODULE(bitfiltertree, m) {
     nb::class_<BitFilterTree>(m, "BitFilterTree")
         .def(nb::init<size_t>())
@@ -746,3 +747,4 @@ NB_MODULE(bitfiltertree, m) {
     m.attr("__version__") = "dev";
 #endif
 }
+#endif

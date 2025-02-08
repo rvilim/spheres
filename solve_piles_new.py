@@ -16,6 +16,8 @@ def main():
                       help='Number of cubes (default: 53)')
     parser.add_argument('--chunk_size', type=int, default=1,
                       help='How many entries in the first pile to dfs')
+    parser.add_argument('--no_progress', action='store_true',
+                      help='Disable progress bars')
     args = parser.parse_args()
 
     solver = piles.PileSolver(num_piles=args.n_piles, 
@@ -25,21 +27,23 @@ def main():
                             tree_path=f'/Users/rvilim/repos/spheres/filters/tree_{((args.n_cubes + 4) // 5) * 5}_10.bin', 
                             memoization_path=f'/Users/rvilim/repos/spheres/memo.bin',
                             memoization_limit=26)
-
+    
     assigned_piles = np.array([solver.init_distribution()])
     first_pile = solver.solve_from_assignment(assigned_piles, 0, num_threads=12)
-
+    print('first_pile', first_pile.shape)
     chunk_size = args.chunk_size
     num_chunks = (len(first_pile) + chunk_size - 1) // chunk_size
     chunks = np.array_split(first_pile, num_chunks)
 
     all_solutions = []
-    for chunk_idx, chunk in tqdm.tqdm(enumerate(chunks), total=len(chunks), desc="Processing chunks"):
+    for chunk_idx, chunk in tqdm.tqdm(enumerate(chunks), total=len(chunks), 
+                                     desc="Processing chunks", disable=args.no_progress):
         assigned_piles = chunk
-        
-        for pile_num in tqdm.tqdm(range(1, args.n_piles), desc=f"Solving pile", leave=False):
+
+        for pile_num in tqdm.tqdm(range(1, args.n_piles), desc=f"Solving pile", 
+                                 leave=False, disable=args.no_progress):
             assigned_piles = solver.solve_from_assignment(assigned_piles, pile_num, num_threads=12)
-        
+            print('n_piles', pile_num, assigned_piles.shape)
         if len(assigned_piles) > 0:
             all_solutions.append(assigned_piles)
             break

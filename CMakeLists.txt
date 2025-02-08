@@ -47,17 +47,23 @@ endif()
 # Now find OpenMP
 find_package(OpenMP REQUIRED)
 
-# Create the piles module
-nanobind_add_module(piles 
+# Create the core library that doesn't depend on Python/nanobind
+add_library(core_lib
+    src/bitfiltertree.cpp
     src/piles.cpp
-    src/bitfiltertree.cpp
 )
+target_link_libraries(core_lib PRIVATE OpenMP::OpenMP_CXX)
 
-# Link OpenMP to piles
-target_link_libraries(piles PRIVATE OpenMP::OpenMP_CXX)
+# Create the Python modules using the core library
+nanobind_add_module(piles src/piles.cpp)
+target_link_libraries(piles PRIVATE core_lib OpenMP::OpenMP_CXX)
+target_compile_definitions(piles PRIVATE NB_MODULE)
 
-# Create the bitfiltertree module
-nanobind_add_module(bitfiltertree 
-    src/bitfiltertree.cpp
-)
-target_link_libraries(bitfiltertree PRIVATE OpenMP::OpenMP_CXX)
+nanobind_add_module(bitfiltertree src/bitfiltertree.cpp)
+target_link_libraries(bitfiltertree PRIVATE core_lib OpenMP::OpenMP_CXX)
+target_compile_definitions(bitfiltertree PRIVATE NB_MODULE)
+
+# Create the bench executable using the core library
+add_executable(bench src/bench.cpp)
+target_link_libraries(bench PRIVATE core_lib OpenMP::OpenMP_CXX)
+

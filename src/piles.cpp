@@ -2,36 +2,22 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include "bitfiltertree.h"
 #include "piles.h"
 #include <cstdlib>
 #include <map>
 #include <fstream>
-#include "bitfiltertree.h"
 #include <mutex>
 #include <atomic>
 
+// Wrap nanobind-specific includes and code
+#ifdef NB_MODULE
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/string.h>
-#include <cstdint> // for __uint128_t
-
-namespace nb = nanobind;  // Add this line to use nb:: shorthand
-
-// Now we can specialize it
-namespace nanobind::detail {
-
-template <>
-struct dtype_traits<__uint128_t> {
-    static constexpr dlpack::dtype value {
-        (uint8_t) dlpack::dtype_code::UInt,
-        128,
-        1
-    };
-    static constexpr auto name = const_name("uint128");
-};
-
-} // end namespace nanobind::detail
+namespace nb = nanobind;
+#endif
 
 using namespace std;
 
@@ -91,11 +77,11 @@ constexpr std::array<int, 100> PileSolver::make_cubes() {
 void PileSolver::initialize_memoization() {
     auto start = std::chrono::high_resolution_clock::now();
     // Try all possible combinations of the first MEMOIZATION_LIMIT bits
-    for (__int128 bits = 0; bits < (1 << memoization_limit); bits++) {
+    for (__uint128_t bits = 0; bits < (1 << memoization_limit); bits++) {
         int sum = 0;
         // Calculate sum for this combination
         for (int pos = 0; pos < memoization_limit; pos++) {
-            if (bits & ((__int128)1 << pos)) {
+            if (bits & ((__uint128_t)1 << pos)) {
                 sum += cubes[pos];
             }
         }
@@ -116,8 +102,8 @@ int PileSolver::sum_pile(__uint128_t pile) {
     return s;
 }
 
-vector<__int128> PileSolver::find_valid_patterns(int target, __int128 disallowed) {
-    vector<__int128> valid_patterns;
+vector<__uint128_t> PileSolver::find_valid_patterns(int target, __uint128_t disallowed) {
+    vector<__uint128_t> valid_patterns;
     
     auto it = precalculated_sums.find(target);
     if (it == precalculated_sums.end()) {
@@ -140,8 +126,17 @@ bool PileSolver::classify_pattern(__uint128_t pile) const {
 }
 
 vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
-                                       __uint128_t pile, __int128 disallowed) {
+                                       __uint128_t pile, __uint128_t disallowed, bool first_level) {
     vector<__uint128_t> solutions;
+
+    // Skip disallowed positions until we hit a valid one or the memoization limit
+    while (pos >= 0 && (disallowed & ((__uint128_t)1 << pos))) {
+        if (pos == memoization_limit - 1) {
+            break;  // Stop at memoization boundary to allow memoization check
+        }
+        pos--;
+    }
+    if (pos < 0) return solutions;
 
     if (enable_memoize && (pos == memoization_limit - 1) && n_cubes >= memoization_limit) {
         auto valid_patterns = find_valid_patterns(target, disallowed);        
@@ -149,7 +144,7 @@ vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
         for (const auto& bits : valid_patterns) {
             __uint128_t new_solution = pile;
             for (int i = 0; i < memoization_limit; i++) {
-                if (bits & ((__int128)1 << i)) {
+                if (bits & ((__uint128_t)1 << i)) {
                     BitFilterTree::SetBit(new_solution, i);
                 }
             }
@@ -159,12 +154,6 @@ vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
             }
         }
         return solutions;
-    }
-
-    // If current position is disallowed, just move down one position
-    if (disallowed & ((__int128)1 << pos)) {
-        if (pos == 0) return solutions;
-        return make_pile(target, remaining, pos - 1, pile, disallowed);
     }
 
     if (target > remaining) {
@@ -184,31 +173,33 @@ vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
     // Try setting the current position
     if (target - cubes[pos] > 0) {
         BitFilterTree::SetBit(pile, pos);
-        auto sub_solutions = make_pile(target - cubes[pos], remaining - cubes[pos], pos - 1, pile, disallowed);
+        auto sub_solutions = make_pile(target - cubes[pos], remaining - cubes[pos], pos - 1, pile, disallowed, false);
         solutions.insert(solutions.end(), sub_solutions.begin(), sub_solutions.end());
         pile &= ~(__uint128_t(1) << pos); // Clear the bit
     }
 
-    // Try without setting the current position
-    auto more_solutions = make_pile(target, remaining - cubes[pos], pos - 1, pile, disallowed);
-    solutions.insert(solutions.end(), more_solutions.begin(), more_solutions.end());
+    if (!first_level) {
+        // Try without setting the current position
+        auto more_solutions = make_pile(target, remaining - cubes[pos], pos - 1, pile, disallowed, false);
+        solutions.insert(solutions.end(), more_solutions.begin(), more_solutions.end());
+    }
 
     return solutions;
 }
 
 vector<int> PileSolver::init_distribution() {
     vector<int> assignments(n_cubes, -1);  // Initialize all positions as unassigned (-1)
-    int target = sums[n_cubes-1]/n_piles;
+    // int target = sums[n_cubes-1]/n_piles;
 
-    // Assign highest cube to pile 0
-    assignments[n_cubes-1] = 0;
+    // // Assign highest cube to pile 0
+    // assignments[n_cubes-1] = 0;
 
-    // Assign cubes to other piles if needed
-    for (int pile_num = 1; pile_num < n_piles; pile_num++) {
-        if (cubes[n_cubes-pile_num]+cubes[n_cubes-pile_num-1] > target) {
-            assignments[n_cubes-pile_num-1] = pile_num;
-        }
-    }
+    // // Assign cubes to other piles if needed
+    // for (int pile_num = 1; pile_num < n_piles; pile_num++) {
+    //     if (cubes[n_cubes-pile_num]+cubes[n_cubes-pile_num-1] > target) {
+    //         assignments[n_cubes-pile_num-1] = pile_num;
+    //     }
+    // }
 
     return assignments;
 }
@@ -234,11 +225,11 @@ int PileSolver::init_pos(vector<__uint128_t> piles) {
     return -1;
 }
 
-int PileSolver::calc_remaining(__int128 disallowed) {
+int PileSolver::calc_remaining(__uint128_t disallowed) {
     int remaining = sums[n_cubes-1];
 
     for (int pos = 0; pos < n_cubes; pos++) {
-        if (disallowed & ((__int128)1 << pos)) {
+        if (disallowed & ((__uint128_t)1 << pos)) {
             remaining -= cubes[pos];
         }
     }
@@ -275,6 +266,7 @@ PileSolver::PileSetup PileSolver::setup_pile_calculation(const int* data, size_t
     return setup;
 }
 
+#ifdef NB_MODULE
 nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
     const nb::ndarray<int> assignments,
     int target_pile_num,
@@ -304,7 +296,7 @@ nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
                 for (size_t example = chunk_start; example < chunk_end; example++) {
                     auto setup = setup_pile_calculation(data, example, target_pile_num);
                     all_pile_solutions[example] = make_pile(setup.target, setup.remaining, setup.pos, 
-                                                          setup.target_pile, setup.disallowed);
+                                                          setup.target_pile, setup.disallowed, true);
                 }
             }
         });
@@ -374,6 +366,7 @@ nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
     
     return result;
 }
+#endif
 
 bool PileSolver::load_memoization(const std::string& path) {
     if (path.empty()) return false;
@@ -392,8 +385,8 @@ bool PileSolver::load_memoization(const std::string& path) {
             file.read(reinterpret_cast<char*>(&sum), sizeof(int));
             file.read(reinterpret_cast<char*>(&vec_size), sizeof(size_t));
             
-            std::vector<__int128> values(vec_size);
-            file.read(reinterpret_cast<char*>(values.data()), vec_size * sizeof(__int128));
+            std::vector<__uint128_t> values(vec_size);
+            file.read(reinterpret_cast<char*>(values.data()), vec_size * sizeof(__uint128_t));
             precalculated_sums[sum] = std::move(values);
         }
         
@@ -424,7 +417,7 @@ void PileSolver::save_memoization(const std::string& path) {
             size_t vec_size = values.size();
             file.write(reinterpret_cast<const char*>(&sum), sizeof(int));
             file.write(reinterpret_cast<const char*>(&vec_size), sizeof(size_t));
-            file.write(reinterpret_cast<const char*>(values.data()), vec_size * sizeof(__int128));
+            file.write(reinterpret_cast<const char*>(values.data()), vec_size * sizeof(__uint128_t));
         }
         std::cout << "Saved memoization to file" << std::endl;
     } catch (...) {
@@ -432,6 +425,8 @@ void PileSolver::save_memoization(const std::string& path) {
     }
 }
 
+// Wrap the module definition
+#ifdef NB_MODULE
 NB_MODULE(piles, m) {
     nb::class_<PileSolver>(m, "PileSolver")
         .def(nb::init<size_t, size_t, bool, bool, const std::string&, size_t, const std::string&>(),
@@ -445,12 +440,12 @@ NB_MODULE(piles, m) {
         .def("init_pos", &PileSolver::init_pos)
         .def("init_distribution", &PileSolver::init_distribution)
         .def("init_remaining", &PileSolver::init_remaining)
-        .def("calc_remaining", [](PileSolver& self, __int128 disallowed) -> int {
+        .def("calc_remaining", [](PileSolver& self, __uint128_t disallowed) -> int {
             return self.calc_remaining(disallowed);
         })
         .def("make_pile", [](PileSolver& self, int target, int remaining, int pos, 
-                            __uint128_t pile, __int128 disallowed) -> std::vector<__uint128_t> {
-            return self.make_pile(target, remaining, pos, pile, disallowed);
+                            __uint128_t pile, __uint128_t disallowed, bool first_level) -> std::vector<__uint128_t> {
+            return self.make_pile(target, remaining, pos, pile, disallowed, first_level);
         })
         .def("classify_pattern", [](PileSolver& self, __uint128_t pile) -> bool {
             return self.classify_pattern(pile);
@@ -487,3 +482,4 @@ NB_MODULE(piles, m) {
     m.attr("__version__") = "dev";
 #endif
 }
+#endif
