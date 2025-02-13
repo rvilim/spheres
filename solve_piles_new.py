@@ -22,14 +22,14 @@ def main():
 
     solver = piles.PileSolver(num_piles=args.n_piles, 
                             num_cubes=args.n_cubes, 
-                            do_memoize=True,
-                            do_diophantine=True,
+                            do_memoize=False,
+                            do_diophantine=False,
                             tree_path=f'/Users/rvilim/repos/spheres/filters/tree_{((args.n_cubes + 4) // 5) * 5}_10.bin', 
                             memoization_path=f'/Users/rvilim/repos/spheres/memo.bin',
                             memoization_limit=26)
     
     assigned_piles = np.array([solver.init_distribution()])
-    first_pile = solver.solve_from_assignment(assigned_piles, 0, num_threads=12)
+    first_pile = solver.solve_from_assignment(assigned_piles, 0, num_threads=1)
     print('first_pile', first_pile.shape)
     chunk_size = args.chunk_size
     num_chunks = (len(first_pile) + chunk_size - 1) // chunk_size
@@ -43,10 +43,10 @@ def main():
         for pile_num in tqdm.tqdm(range(1, args.n_piles), desc=f"Solving pile", 
                                  leave=False, disable=args.no_progress):
             assigned_piles = solver.solve_from_assignment(assigned_piles, pile_num, num_threads=12)
-            print('n_piles', pile_num, assigned_piles.shape)
+            # print('n_piles', pile_num, assigned_piles.shape)
         if len(assigned_piles) > 0:
             all_solutions.append(assigned_piles)
-            break
+            # break
 
     if all_solutions:
         final_solutions = np.concatenate(all_solutions)
@@ -54,13 +54,43 @@ def main():
         print_piles(final_solutions[0,:], args.n_piles, args.n_cubes)
     else:
         print("\nNo complete solutions found")
+    
 
+
+    for row in range(final_solutions.shape[0]):
+        print(''.join(str(i) for i in final_solutions[row,:]))
+        print_piles(final_solutions[row,:], args.n_piles, args.n_cubes)
+        print(" ")
+        
+    # print(all_solutions)
 
 def print_piles(solution, n_piles, n_cubes):
     for pile in range(n_piles):
         s = sum((pos+1)**3 for pos, s in enumerate(solution) if s==pile)
         print(''.join(str(int(pile==s)) for s in solution),'-',s)
         
+def test():
 
+    solver = piles.PileSolver(num_piles=8, 
+                            num_cubes=47, 
+                            do_memoize=False,
+                            do_diophantine=False,
+                            tree_path=f'/Users/rvilim/repos/spheres/filters/tree_{((47 + 4) // 5) * 5}_10.bin', 
+                            memoization_path=f'/Users/rvilim/repos/spheres/memo.bin',
+                            memoization_limit=26)
+    
+    assigned_piles = np.array([solver.init_distribution()])
+    first_pile = solver.solve_from_assignment(assigned_piles, 0, num_threads=1)
+    second_pile = solver.solve_from_assignment(first_pile, 1, num_threads=1)
+
+    str_array = np.array(second_pile, dtype=str)
+    str_array[str_array == '-1'] = '.'
+    for row in str_array:
+        print(''.join(row))
+        
+    # print(first_pile)
+    # print(second_pile)
+    # print(first_pile[(first_pile[:,2]==0) & (first_pile[:,3]==0)].shape)
+    # print(second_pile.shape)
 if __name__ == "__main__":
-    main()
+    test()

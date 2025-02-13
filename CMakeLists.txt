@@ -24,8 +24,10 @@ find_package(Python COMPONENTS Interpreter Development REQUIRED)
 
 # Detect the installed nanobind package and import it into CMake
 execute_process(
-  COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-  OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
+ COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+ OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT
+)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ext/nanobind)
 find_package(nanobind CONFIG REQUIRED)
 
 # Set OpenMP flags for macOS BEFORE finding OpenMP
@@ -64,6 +66,6 @@ target_link_libraries(bitfiltertree PRIVATE core_lib OpenMP::OpenMP_CXX)
 target_compile_definitions(bitfiltertree PRIVATE NB_MODULE)
 
 # Create the bench executable using the core library
-add_executable(bench src/bench.cpp)
-target_link_libraries(bench PRIVATE core_lib OpenMP::OpenMP_CXX)
+#add_executable(bench src/bench.cpp)
+#target_link_libraries(bench PRIVATE core_lib OpenMP::OpenMP_CXX)
 

@@ -77,7 +77,7 @@ constexpr std::array<int, 100> PileSolver::make_cubes() {
 void PileSolver::initialize_memoization() {
     auto start = std::chrono::high_resolution_clock::now();
     // Try all possible combinations of the first MEMOIZATION_LIMIT bits
-    for (__uint128_t bits = 0; bits < (1 << memoization_limit); bits++) {
+    for (__uint128_t bits = 0; bits < ((__uint128_t)1 << memoization_limit); bits++) {
         int sum = 0;
         // Calculate sum for this combination
         for (int pos = 0; pos < memoization_limit; pos++) {
@@ -104,7 +104,8 @@ int PileSolver::sum_pile(__uint128_t pile) {
 
 vector<__uint128_t> PileSolver::find_valid_patterns(int target, __uint128_t disallowed) {
     vector<__uint128_t> valid_patterns;
-    
+
+
     auto it = precalculated_sums.find(target);
     if (it == precalculated_sums.end()) {
         return valid_patterns;
@@ -117,6 +118,8 @@ vector<__uint128_t> PileSolver::find_valid_patterns(int target, __uint128_t disa
             valid_patterns.push_back(bits);
         }
     }
+    // std::cout << "Number of patterns for target " << target << ": " << patterns.size() << std::endl;
+    // std::cout << "Number of valid patterns for target " << target << ": " << valid_patterns.size() << std::endl;
     return valid_patterns;
 }
 
@@ -128,14 +131,16 @@ bool PileSolver::classify_pattern(__uint128_t pile) const {
 vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
                                        __uint128_t pile, __uint128_t disallowed, bool first_level) {
     vector<__uint128_t> solutions;
+    auto start_pos = pos;
 
     // Skip disallowed positions until we hit a valid one or the memoization limit
-    while (pos >= 0 && (disallowed & ((__uint128_t)1 << pos))) {
-        if (pos == memoization_limit - 1) {
-            break;  // Stop at memoization boundary to allow memoization check
-        }
-        pos--;
-    }
+    // while (pos >= 0 && (disallowed & ((__uint128_t)1 << pos))) {
+    //     if (pos == memoization_limit - 1) {
+    //         break;  // Stop at memoization boundary to allow memoization check
+    //     }
+    //     pos--;
+    // }
+    
     if (pos < 0) return solutions;
 
     if (enable_memoize && (pos == memoization_limit - 1) && n_cubes >= memoization_limit) {
@@ -143,12 +148,8 @@ vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
         
         for (const auto& bits : valid_patterns) {
             __uint128_t new_solution = pile;
-            for (int i = 0; i < memoization_limit; i++) {
-                if (bits & ((__uint128_t)1 << i)) {
-                    BitFilterTree::SetBit(new_solution, i);
-                }
-            }
-            
+            // Combine bits directly with OR operation
+            new_solution |= bits;
             if (!enable_diophantine || (enable_diophantine && !classify_pattern(new_solution))) {
                 solutions.push_back(new_solution);
             }
@@ -233,6 +234,7 @@ int PileSolver::calc_remaining(__uint128_t disallowed) {
             remaining -= cubes[pos];
         }
     }
+
     return remaining;
 }
 
@@ -250,7 +252,6 @@ PileSolver::PileSetup PileSolver::setup_pile_calculation(const int* data, size_t
             }
         }
     }
-    
     // Calculate target sum for the pile we're solving
     setup.target = sums[n_cubes-1]/n_piles - sum_pile(setup.target_pile);
     
@@ -280,7 +281,7 @@ nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
     std::vector<std::vector<__uint128_t>> all_pile_solutions(num_examples);
     std::atomic<size_t> next_example{0};
     std::vector<std::thread> threads;
-    
+        
     // First pass: calculate all pile solutions
     for (size_t thread_id = 0; thread_id < num_threads; thread_id++) {
         threads.emplace_back([&]() {
@@ -295,6 +296,7 @@ nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
                 // Process all examples in this chunk
                 for (size_t example = chunk_start; example < chunk_end; example++) {
                     auto setup = setup_pile_calculation(data, example, target_pile_num);
+                    
                     all_pile_solutions[example] = make_pile(setup.target, setup.remaining, setup.pos, 
                                                           setup.target_pile, setup.disallowed, true);
                 }
