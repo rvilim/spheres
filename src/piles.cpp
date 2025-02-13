@@ -170,20 +170,33 @@ vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
     }
 
     if (pos == 0) return solutions;
+    
+    vector<__uint128_t> set_solutions;
+    vector<__uint128_t> unset_solutions;
 
     // Try setting the current position
     if (target - cubes[pos] > 0) {
         BitFilterTree::SetBit(pile, pos);
-        auto sub_solutions = make_pile(target - cubes[pos], remaining - cubes[pos], pos - 1, pile, disallowed, false);
-        solutions.insert(solutions.end(), sub_solutions.begin(), sub_solutions.end());
+        set_solutions = make_pile(target - cubes[pos], remaining - cubes[pos], pos - 1, pile, disallowed, false);
         pile &= ~(__uint128_t(1) << pos); // Clear the bit
     }
 
     if (!first_level) {
         // Try without setting the current position
-        auto more_solutions = make_pile(target, remaining - cubes[pos], pos - 1, pile, disallowed, false);
-        solutions.insert(solutions.end(), more_solutions.begin(), more_solutions.end());
+        unset_solutions = make_pile(target, remaining - cubes[pos], pos - 1, pile, disallowed, false);
     }
+
+    solutions.reserve(solutions.size() + set_solutions.size() + unset_solutions.size());
+    solutions.insert(
+        solutions.end(),
+        std::make_move_iterator(set_solutions.begin()),
+        std::make_move_iterator(set_solutions.end())
+    );
+    solutions.insert(
+        solutions.end(),
+        std::make_move_iterator(unset_solutions.begin()),
+        std::make_move_iterator(unset_solutions.end())
+    );
 
     return solutions;
 }
