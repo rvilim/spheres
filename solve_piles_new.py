@@ -68,6 +68,7 @@ def main():
             all_solutions.append(assigned_piles)
             if args.early_exit:
                 break
+
     total_time = time.time() - start_time
 
     if all_solutions:
@@ -77,9 +78,9 @@ def main():
         print(f"Total time: {total_time:.2f}s")
         print(" ")
 
-        # for i in range(final_solutions.shape[0]):
-        #     print_piles(final_solutions[i,:], args.n_piles, args.n_cubes)
-        #     print(" ")
+        for i in range(final_solutions.shape[0]):
+            print_piles(final_solutions[i,:], args.n_piles, args.n_cubes)
+            print(" ")
     else:
         print("\nNo complete solutions found")
 
