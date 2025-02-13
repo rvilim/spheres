@@ -133,14 +133,15 @@ vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
     vector<__uint128_t> solutions;
     auto start_pos = pos;
 
+
     // Skip disallowed positions until we hit a valid one or the memoization limit
-    // while (pos >= 0 && (disallowed & ((__uint128_t)1 << pos))) {
-    //     if (pos == memoization_limit - 1) {
-    //         break;  // Stop at memoization boundary to allow memoization check
-    //     }
-    //     pos--;
-    // }
-    
+    while (pos >= 0 && (disallowed & ((__uint128_t)1 << pos))) {
+        if (enable_memoize && (pos == memoization_limit - 1)) {
+            break;  // Stop at memoization boundary to allow memoization check
+        }
+        pos--;
+    }
+
     if (pos < 0) return solutions;
 
     if (enable_memoize && (pos == memoization_limit - 1) && n_cubes >= memoization_limit) {
@@ -148,7 +149,6 @@ vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
         
         for (const auto& bits : valid_patterns) {
             __uint128_t new_solution = pile;
-            // Combine bits directly with OR operation
             new_solution |= bits;
             if (!enable_diophantine || (enable_diophantine && !classify_pattern(new_solution))) {
                 solutions.push_back(new_solution);
@@ -253,6 +253,9 @@ PileSolver::PileSetup PileSolver::setup_pile_calculation(const int* data, size_t
         }
     }
     // Calculate target sum for the pile we're solving
+    if (sums[n_cubes-1] % n_piles != 0) {
+        throw std::runtime_error("Total sum is not evenly divisible by number of piles");
+    }
     setup.target = sums[n_cubes-1]/n_piles - sum_pile(setup.target_pile);
     
     // Find highest available position
@@ -267,11 +270,21 @@ PileSolver::PileSetup PileSolver::setup_pile_calculation(const int* data, size_t
     return setup;
 }
 
+bool PileSolver::should_process_mask(__uint128_t mask) {
+    std::lock_guard<std::mutex> lock(seen_masks_mutex);
+    if (seen_masks.find(mask) == seen_masks.end()) {
+        seen_masks.insert(mask);
+        return true;
+    }
+    return false;
+}
+
 #ifdef NB_MODULE
 nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
     const nb::ndarray<int> assignments,
     int target_pile_num,
-    size_t num_threads) {
+    size_t num_threads,
+    bool do_mask_dedupe) {
     auto start = std::chrono::high_resolution_clock::now();
 
     const int* data = assignments.data();
@@ -285,7 +298,7 @@ nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
     // First pass: calculate all pile solutions
     for (size_t thread_id = 0; thread_id < num_threads; thread_id++) {
         threads.emplace_back([&]() {
-            constexpr size_t CHUNK_SIZE = 128;  // Process 32 examples at a time
+            constexpr size_t CHUNK_SIZE = 2;  // Process 32 examples at a time
             while (true) {
                 size_t chunk_start = next_example.fetch_add(CHUNK_SIZE);
                 if (chunk_start >= num_examples) break;
@@ -297,8 +310,10 @@ nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
                 for (size_t example = chunk_start; example < chunk_end; example++) {
                     auto setup = setup_pile_calculation(data, example, target_pile_num);
                     
-                    all_pile_solutions[example] = make_pile(setup.target, setup.remaining, setup.pos, 
-                                                          setup.target_pile, setup.disallowed, true);
+                    if (!do_mask_dedupe || should_process_mask(setup.disallowed)) {
+                        all_pile_solutions[example] = make_pile(setup.target, setup.remaining, setup.pos, 
+                                                              setup.target_pile, setup.disallowed, true);
+                    }
                 }
             }
         });
@@ -456,6 +471,7 @@ NB_MODULE(piles, m) {
              nb::arg("assignments"),
              nb::arg("target_pile_num"),
              nb::arg("num_threads") = 1,
+             nb::arg("do_mask_dedupe") = false,
              "Solve for a pile given existing assignments. Returns a list of possible assignments, where each assignment is a numpy array and -1 indicates unassigned")
         .def("initialize_memoization", &PileSolver::initialize_memoization, 
               "Initialize the memoization table for faster lookups of small positions");
