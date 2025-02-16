@@ -102,9 +102,8 @@ int PileSolver::sum_pile(__uint128_t pile) {
     return s;
 }
 
-vector<__uint128_t> PileSolver::find_valid_patterns(int target, __uint128_t disallowed) {
+vector<__uint128_t> PileSolver::find_valid_patterns(int target, __uint128_t disallowed) const {
     vector<__uint128_t> valid_patterns;
-
 
     auto it = precalculated_sums.find(target);
     if (it == precalculated_sums.end()) {
@@ -118,8 +117,6 @@ vector<__uint128_t> PileSolver::find_valid_patterns(int target, __uint128_t disa
             valid_patterns.push_back(bits);
         }
     }
-    // std::cout << "Number of patterns for target " << target << ": " << patterns.size() << std::endl;
-    // std::cout << "Number of valid patterns for target " << target << ": " << valid_patterns.size() << std::endl;
     return valid_patterns;
 }
 
@@ -129,7 +126,7 @@ bool PileSolver::classify_pattern(__uint128_t pile) const {
 }
 
 vector<__uint128_t> PileSolver::make_pile(int target, int remaining, int pos,
-                                       __uint128_t pile, __uint128_t disallowed, bool first_level) {
+                                         __uint128_t pile, __uint128_t disallowed, bool first_level) const {
     vector<__uint128_t> solutions;
     auto start_pos = pos;
 
@@ -239,7 +236,7 @@ int PileSolver::init_pos(vector<__uint128_t> piles) {
     return -1;
 }
 
-int PileSolver::calc_remaining(__uint128_t disallowed) {
+int PileSolver::calc_remaining(__uint128_t disallowed) const {
     int remaining = sums[n_cubes-1];
 
     for (int pos = 0; pos < n_cubes; pos++) {

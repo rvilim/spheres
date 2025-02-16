@@ -1,13 +1,18 @@
 //
 // Created by Ryan Vilim on 2/12/22.
 //
-#ifndef PILES_PILES_H
-#define PILES_PILES_H
+#ifndef PILES_H
+#define PILES_H
 
 #include <vector>
 #include <array>
+#include <string>
 #include <map>
+#include <condition_variable>
 #include <unordered_set>
+#include <future>
+#include <ranges>
+
 #include "bitfiltertree.h"
 // Wrap nanobind-specific includes
 #ifdef NB_MODULE
@@ -46,21 +51,15 @@ private:
     PileSetup setup_pile_calculation(const int* data, size_t example, int target_pile_num);
 
 public:
-    PileSolver(size_t num_piles = 3, 
-               size_t num_cubes = 23, 
-               bool do_memoize = true,
-               bool do_diophantine = true,
-               const std::string& tree_path = "tree.bin", 
-               size_t memoization_limit = 27,
-               const std::string& memoization_path = "memo.bin");
+    PileSolver(size_t num_piles, size_t num_cubes, bool do_memoize, bool do_diophantine, const string& tree_path, size_t memoization_limit, const string& memoization_path);
     static constexpr std::array<int, 100> make_sums();
     static constexpr std::array<int, 100> make_cubes();
     void initialize_memoization();
     
     // Core pile manipulation functions
     vector<__uint128_t> make_pile(int target, int remaining, int pos,
-                                __uint128_t pile, __uint128_t disallowed, bool first_level);
-    int calc_remaining(__uint128_t disallowed);
+                                 __uint128_t pile, __uint128_t disallowed, bool first_level) const;
+    int calc_remaining(__uint128_t disallowed) const;
     int sum_pile(__uint128_t pile);
 
     // Initialization functions
@@ -78,10 +77,10 @@ public:
         bool do_mask_dedupe = false);
     #endif
 private:
-    vector<__uint128_t> find_valid_patterns(int target, __uint128_t disallowed);
+    vector<__uint128_t> find_valid_patterns(int target, __uint128_t disallowed) const;
     bool load_memoization(const std::string& path);
     void save_memoization(const std::string& path);
     bool should_process_mask(__uint128_t mask);
 };
 
-#endif //PILES_PILES_H
+#endif //PILES_H

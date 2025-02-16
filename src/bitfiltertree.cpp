@@ -646,23 +646,16 @@ bool BitFilterTree::ClassifyPattern(__uint128_t set_bits) const {
 }
 
 bool BitFilterTree::ClassifyPatternHelper(__uint128_t set_bits, const TreeNode* node) const {
-    // if (!node) {
-    //     return false;
-    // }
-
     // If we've reached a leaf node, check if any pattern matches our constraints
     if (node->is_leaf) {
         for (const auto& leaf_pattern : node->patterns) {
-
             // If all the bits that are required by this pattern are set
             const bool required_set =  (leaf_pattern.required & set_bits) == leaf_pattern.required;
 
             // Here we fold our high bit mask into set bits when checking against disallowed
             const bool disallowed_unset = (leaf_pattern.disallowed & (set_bits | high_bit_mask)) == 0;
 
-            if ( required_set && disallowed_unset){
-                return true;
-            }
+            return required_set && disallowed_unset;
         }
         return false;
     }
