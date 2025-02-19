@@ -280,21 +280,11 @@ PileSolver::PileSetup PileSolver::setup_pile_calculation(const int* data, size_t
     return setup;
 }
 
-bool PileSolver::should_process_mask(__uint128_t mask) {
-    std::lock_guard<std::mutex> lock(seen_masks_mutex);
-    if (seen_masks.find(mask) == seen_masks.end()) {
-        seen_masks.insert(mask);
-        return true;
-    }
-    return false;
-}
-
 #ifdef NB_MODULE
 nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
     const nb::ndarray<int> assignments,
     int target_pile_num,
-    size_t num_threads,
-    bool do_mask_dedupe) {
+    size_t num_threads) {
     auto start = std::chrono::high_resolution_clock::now();
 
     const int* data = assignments.data();
@@ -319,11 +309,8 @@ nb::ndarray<nb::numpy, int, nb::ndim<2>> PileSolver::solve_from_assignment(
                 // Process all examples in this chunk
                 for (size_t example = chunk_start; example < chunk_end; example++) {
                     auto setup = setup_pile_calculation(data, example, target_pile_num);
-                    
-                    if (!do_mask_dedupe || should_process_mask(setup.disallowed)) {
-                        all_pile_solutions[example] = make_pile(setup.target, setup.remaining, setup.pos, 
-                                                              setup.target_pile, setup.disallowed, true);
-                    }
+                    all_pile_solutions[example] = make_pile(setup.target, setup.remaining, setup.pos, 
+                                                          setup.target_pile, setup.disallowed, true);
                 }
             }
         });
@@ -481,7 +468,6 @@ NB_MODULE(piles, m) {
              nb::arg("assignments"),
              nb::arg("target_pile_num"),
              nb::arg("num_threads") = 1,
-             nb::arg("do_mask_dedupe") = false,
              "Solve for a pile given existing assignments. Returns a list of possible assignments, where each assignment is a numpy array and -1 indicates unassigned")
         .def("initialize_memoization", &PileSolver::initialize_memoization, 
               "Initialize the memoization table for faster lookups of small positions");

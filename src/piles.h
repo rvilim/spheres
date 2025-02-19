@@ -44,8 +44,6 @@ private:
     std::vector<__uint128_t> preassigned_piles;
     std::vector<int> preassigned_remaining;
     std::vector<__uint128_t> preassigned_disallowed;
-    std::unordered_set<__uint128_t> seen_masks;
-    std::mutex seen_masks_mutex;
 
     // Add the new private helper method
     PileSetup setup_pile_calculation(const int* data, size_t example, int target_pile_num);
@@ -73,14 +71,12 @@ public:
     nb::ndarray<nb::numpy, int, nb::ndim<2>> solve_from_assignment(
         const nb::ndarray<int> assignments,
         int target_pile_num,
-        size_t num_threads = 1,
-        bool do_mask_dedupe = false);
+        size_t num_threads = 1);
     #endif
 private:
     vector<__uint128_t> find_valid_patterns(int target, __uint128_t disallowed) const;
     bool load_memoization(const std::string& path);
     void save_memoization(const std::string& path);
-    bool should_process_mask(__uint128_t mask);
 };
 
 #endif //PILES_H
